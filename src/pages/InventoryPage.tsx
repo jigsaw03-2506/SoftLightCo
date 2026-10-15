@@ -21,6 +21,7 @@ type InventoryPageProps = {
   onEditBatch: (batch: InventoryBatch, updates: Pick<InventoryBatch, 'quantityReceived' | 'unitPurchaseCost' | 'receivedAt' | 'supplier' | 'notes'>) => boolean
   onAddCategory: (name: string) => boolean
   onRenameCategory: (categoryId: string, name: string) => boolean
+  onDeleteCategory: (categoryId: string) => boolean
   onShowToast: (message: string, type?: 'success' | 'error') => void
 }
 
@@ -49,6 +50,7 @@ export function InventoryPage({
   onEditBatch,
   onAddCategory,
   onRenameCategory,
+  onDeleteCategory,
   onShowToast,
 }: InventoryPageProps) {
   const [dialog, setDialog] = useState<DialogState>(null)
@@ -139,6 +141,16 @@ export function InventoryPage({
     } else {
       onShowToast('Enter a unique category name.', 'error')
     }
+  }
+
+  const deleteCategory = (category: Category) => {
+    const productCount = products.filter((product) => product.isActive !== false && product.categoryId === category.id).length
+    if (productCount > 0) {
+      onShowToast(`${category.name} is used by ${productCount} product${productCount === 1 ? '' : 's'}. Move them to another category first.`, 'error')
+      return
+    }
+    if (!window.confirm(`Delete category ${category.name}? Historical sale records are unchanged.`)) return
+    if (onDeleteCategory(category.id)) onShowToast('Category deleted.')
   }
 
   const submitBatchEdit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -255,6 +267,7 @@ export function InventoryPage({
                     <>
                       <span className="text-[10px] text-slate-700">{category.name}</span>
                       <button type="button" className="ml-1 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={`Rename ${category.name}`} onClick={() => { setEditingCategoryId(category.id); setEditingCategoryName(category.name) }}><Pencil className="h-3 w-3" /></button>
+                      <button type="button" className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)}><Trash2 className="h-3 w-3" /></button>
                     </>
                   )}
                 </div>

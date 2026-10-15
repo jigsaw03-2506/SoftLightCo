@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Download, Pencil, ReceiptText, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, Download, Pencil, ReceiptText, Trash2 } from 'lucide-react'
 
-import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
@@ -33,10 +32,27 @@ const dateString = (date: Date) => {
   return `${year}-${month}-${day}`
 }
 
-const today = dateString(new Date())
-const yesterdayDate = new Date()
-yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-const yesterday = dateString(yesterdayDate)
+function shiftDays(date: string, days: number) {
+  const [year, month, day] = date.split('-').map(Number)
+  return dateString(new Date(year, month - 1, day + days))
+}
+
+// The app stays open across midnight on phones, so "today" has to be re-read rather than fixed at load time.
+function useToday() {
+  const [today, setToday] = useState(() => dateString(new Date()))
+  useEffect(() => {
+    const refresh = () => setToday(dateString(new Date()))
+    const timer = window.setInterval(refresh, 60_000)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [])
+  return today
+}
 
 function getSaleRevenue(sale: SaleRecord) {
   return sale.productRevenue ?? sale.total
@@ -166,13 +182,13 @@ function SaleEditor({
 }
 
 export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpdateSale }: DailySalesPageProps) {
+  const today = useToday()
+  const yesterday = shiftDays(today, -1)
   const [dateMode, setDateMode] = useState<'today' | 'yesterday' | 'custom' | 'range'>('today')
   const [customDate, setCustomDate] = useState(today)
   const [rangeStart, setRangeStart] = useState(today)
   const [rangeEnd, setRangeEnd] = useState(today)
   const [reportMonth, setReportMonth] = useState(today.slice(0, 7))
-  const [sortBy, setSortBy] = useState<'revenue' | 'quantity' | 'profit'>('revenue')
-  const [expandedCategories, setExpandedCategories] = useState<string[]>([])
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null)
 
   const confirmDeleteSale = (sale: SaleRecord) => {
@@ -188,7 +204,7 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
       if (dateMode === 'custom') return date === customDate
       return date >= rangeStart && date <= rangeEnd
     })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [sales, dateMode, customDate, rangeStart, rangeEnd])
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [sales, dateMode, today, yesterday, customDate, rangeStart, rangeEnd])
 
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + getSaleRevenue(sale), 0)
   const totalUnits = filteredSales.reduce((sum, sale) => sum + sale.itemCount, 0)
@@ -325,35 +341,7 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
     return [...lines.values()]
   }, [filteredSales])
 
-  const categories = useMemo(() => {
-    const groups = new Map<string, ReportLine[]>()
-    for (const line of reportLines) groups.set(line.categoryName, [...(groups.get(line.categoryName) ?? []), line])
-    return [...groups.entries()].map(([name, lines]) => ({
-      name,
-      lines: lines.sort((a, b) => {
-        if (sortBy === 'quantity') return b.quantity - a.quantity
-        if (sortBy === 'profit') return (b.cogs === null ? -Infinity : b.revenue - b.cogs) - (a.cogs === null ? -Infinity : a.revenue - a.cogs)
-        return b.revenue - a.revenue
-      }),
-      quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-      revenue: lines.reduce((sum, line) => sum + line.revenue, 0),
-      cogs: lines.some((line) => line.cogs === null) ? null : lines.reduce((sum, line) => sum + (line.cogs ?? 0), 0),
-    })).sort((a, b) => {
-      if (sortBy === 'quantity') return b.quantity - a.quantity
-      if (sortBy === 'profit') return (b.cogs === null ? -Infinity : b.revenue - b.cogs) - (a.cogs === null ? -Infinity : a.revenue - a.cogs)
-      return b.revenue - a.revenue
-    })
-  }, [reportLines, sortBy])
-
-  const bestSellers = [...reportLines].sort((a, b) => {
-    if (sortBy === 'quantity') return b.quantity - a.quantity
-    if (sortBy === 'profit') return (b.cogs === null ? -Infinity : b.revenue - b.cogs) - (a.cogs === null ? -Infinity : a.revenue - a.cogs)
-    return b.revenue - a.revenue
-  }).slice(0, 5)
-
-  const toggleCategory = (name: string) => setExpandedCategories((current) =>
-    current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
-  )
+  const bestSellers = [...reportLines].sort((a, b) => b.revenue - a.revenue).slice(0, 5)
 
   const profitLabel = (value: number | null) => value === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(value)
   const dateModeLabels = {
@@ -445,26 +433,6 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
               />
             </section>
           )}
-          {monthlyCashiers.length > 0 ? (
-            <section className="space-y-2">
-              <h3 className="text-xs font-semibold text-slate-700">ရောင်းသူအလိုက်</h3>
-              <div className="grid items-start gap-2 lg:grid-cols-2">
-                {monthlyCashiers.map((row) => (
-                  <ExpandableRow
-                    key={row.cashier}
-                    badge={{ label: `${row.sales} ကြိမ်`, tone: 'blue' }}
-                    title={row.cashier}
-                    subtitle={formatCurrency(row.revenue)}
-                    details={[
-                      ['အရောင်းအကြိမ်', String(row.sales)],
-                      ['ရောင်းချသည့်အရေအတွက်', `${row.units} ခု`],
-                      ['ရောင်းရငွေ', formatCurrency(row.revenue)],
-                    ]}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
         </CardContent>
       </Card>
 
@@ -487,42 +455,6 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
           အချို့သော အရောင်းမှတ်တမ်းများတွင် အရင်းအချက်အလက် မရှိပါ။ ရောင်းရငွေကို ထည့်တွက်ထားပြီး အမြတ်ကို ခန့်မှန်းမည့်အစား မပြည့်စုံဟု ဖော်ပြထားပါသည်။
         </div>
       ) : null}
-
-      <Card>
-        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 p-4 pb-3">
-          <CardTitle className="text-sm">အမျိုးအစားအလိုက် ရောင်းအား</CardTitle>
-          <label className="flex items-center gap-2 text-[10px] text-slate-500">စီရန်
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)} className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-slate-700">
-              <option value="revenue">ရောင်းရငွေ</option><option value="quantity">ရောင်းရသည့်အရေအတွက်</option><option value="profit">အမြတ်</option>
-            </select>
-          </label>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          {categories.length === 0 ? <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">ရွေးထားသော ကာလအတွင်း အရောင်းမရှိပါ။</p> : (
-            <div className="space-y-2">
-              {categories.map((category) => {
-                const expanded = expandedCategories.includes(category.name)
-                return (
-                  <section key={category.name} className="overflow-hidden rounded-lg border border-slate-200">
-                    <button type="button" onClick={() => toggleCategory(category.name)} className="flex w-full flex-wrap items-center justify-between gap-2 bg-slate-50 p-3 text-left">
-                      <span className="flex items-center gap-2 text-xs font-semibold text-slate-800">{expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}{category.name} <Badge>{category.quantity} ခု</Badge></span>
-                      <span className="flex flex-wrap gap-x-3 gap-y-1 text-[10px]"><span>ရောင်းရငွေ <b>{formatCurrency(category.revenue)}</b></span><span>ကုန်ပစ္စည်းအရင်း <b>{category.cogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(category.cogs)}</b></span><span className="text-blue-700">စုစုပေါင်းအမြတ် <b>{category.cogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(category.revenue - category.cogs)}</b></span></span>
-                    </button>
-                    {expanded ? <div className="divide-y divide-slate-100">
-                      {category.lines.map((line) => <div key={`${line.productId}-${line.productName}`} className="grid grid-cols-2 gap-2 px-3 py-2 text-[10px] sm:grid-cols-5">
-                        <span className="font-medium text-slate-800">{line.productName}</span><span className="text-slate-500">{line.quantity} ခု</span><span>ရောင်းရငွေ {formatCurrency(line.revenue)}</span><span>ကုန်ပစ္စည်းအရင်း {line.cogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(line.cogs)}</span><span className="font-semibold text-blue-700">အမြတ် {line.cogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(line.revenue - line.cogs)}</span>
-                      </div>)}
-                    </div> : null}
-                  </section>
-                )
-              })}
-              <div className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-900 p-3 text-[10px] text-white">
-                <b>စုစုပေါင်း · {totalUnits} ခု</b><span>ရောင်းရငွေ {formatCurrency(totalRevenue)} · အရင်း {totalCogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(totalCogs)} · စုစုပေါင်းအမြတ် {profitLabel(grossProfit)}</span>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <Card>

@@ -631,6 +631,11 @@ function App() {
     })
   }
 
+  const deleteCategory = (categoryId: string) => {
+    if (!isAdmin || products.some((product) => product.isActive !== false && product.categoryId === categoryId)) return false
+    return commit({ ...data, categories: categories.filter((category) => category.id !== categoryId) })
+  }
+
   const navItems = [
     { label: 'Checkout', to: '/', icon: ShoppingCart },
     { label: 'Add Products', to: '/products', icon: PackagePlus },
@@ -746,7 +751,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<CheckoutPage products={products.filter((product) => product.isActive !== false)} cart={cart} onAddToCart={addToCart} onIncrease={onIncrease} onDecrease={onDecrease} onRemove={onRemove} onClearCart={() => { checkoutRequestId.current = null; setCart([]) }} onCheckout={onCheckout} isProcessing={isProcessing} />} />
                 <Route path="/products" element={isAdmin ? <AddProductsPage products={products.filter((product) => product.isActive !== false)} categories={categories} isAdmin={isAdmin} onSaveProduct={saveProduct} onShowToast={showToast} /> : <Navigate to="/" replace />} />
-                <Route path="/inventory" element={isAdmin ? <InventoryPage products={products} categories={categories} batches={batches} movements={movements} isAdmin={isAdmin} lowStockThreshold={data.lowStockThreshold} onLowStockThresholdChange={changeLowStockThreshold} onDeleteProduct={deleteProduct} onRestock={restock} onAdjustStock={adjustStock} onEditBatch={editBatch} onAddCategory={addCategory} onRenameCategory={renameCategory} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+                <Route path="/inventory" element={isAdmin ? <InventoryPage products={products} categories={categories} batches={batches} movements={movements} isAdmin={isAdmin} lowStockThreshold={data.lowStockThreshold} onLowStockThresholdChange={changeLowStockThreshold} onDeleteProduct={deleteProduct} onRestock={restock} onAdjustStock={adjustStock} onEditBatch={editBatch} onAddCategory={addCategory} onRenameCategory={renameCategory} onDeleteCategory={deleteCategory} onShowToast={showToast} /> : <Navigate to="/" replace />} />
                 <Route path="/sales" element={isAdmin ? <DailySalesPage sales={sales} products={products} movements={movements} onDeleteSale={deleteSale} onUpdateSale={updateSale} /> : <Navigate to="/" replace />} />
               </Routes>
             </main>
