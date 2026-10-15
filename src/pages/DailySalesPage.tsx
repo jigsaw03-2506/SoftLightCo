@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Download, ReceiptText } from 'lucide-react'
+import { ChevronDown, ChevronUp, Download, Pencil, ReceiptText, Trash2 } from 'lucide-react'
 
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -7,11 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import type { InventoryMovement, Product, SaleItem, SaleRecord } from '../types'
 import { formatCurrency, formatDateOnly, formatDateTime } from '../lib/utils'
+import type { SaleRequestItem } from '../lib/sale'
 
 type DailySalesPageProps = {
   sales: SaleRecord[]
   products: Product[]
   movements: InventoryMovement[]
+  onDeleteSale: (saleId: string) => boolean
+  onUpdateSale: (saleId: string, items: SaleRequestItem[], packagingExpense: number) => boolean
 }
 
 type ReportLine = {
@@ -98,7 +101,71 @@ function ExpandableRow({
   )
 }
 
-export function DailySalesPage({ sales, products, movements }: DailySalesPageProps) {
+function SaleEditor({
+  sale,
+  products,
+  onSave,
+  onCancel,
+}: {
+  sale: SaleRecord
+  products: Product[]
+  onSave: (items: SaleRequestItem[], packagingExpense: number) => boolean
+  onCancel: () => void
+}) {
+  const [quantities, setQuantities] = useState(() => sale.items.map((item) => String(item.quantity)))
+  const [packaging, setPackaging] = useState(String(sale.packagingExpense ?? 0))
+  const [error, setError] = useState('')
+
+  const save = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const packagingExpense = Number(packaging)
+    const items: SaleRequestItem[] = []
+    for (const [index, item] of sale.items.entries()) {
+      const quantity = Number(quantities[index])
+      if (!Number.isInteger(quantity) || quantity < 0) {
+        setError('အရေအတွက်ကို 0 သို့မဟုတ် အပေါင်းကိန်းပြည့်ဖြင့် ထည့်ပါ။')
+        return
+      }
+      if (quantity > 0) items.push({ productId: item.productId, quantity })
+    }
+    if (items.length === 0) {
+      setError('ပစ္စည်းအားလုံးကို ဖယ်ရှားလိုပါက အရောင်းမှတ်တမ်းကို ဖျက်ပါ။')
+      return
+    }
+    if (!Number.isFinite(packagingExpense) || packagingExpense < 0) {
+      setError('ထုပ်ပိုးစရိတ်ကို မှန်ကန်စွာ ထည့်ပါ။')
+      return
+    }
+    if (onSave(items, packagingExpense)) onCancel()
+  }
+
+  return (
+    <form onSubmit={save} className="space-y-2 border-t border-slate-100 bg-blue-50/40 p-3 text-[10px]">
+      <p className="font-semibold text-slate-800">အရောင်းမှတ်တမ်း ပြင်ဆင်ရန်</p>
+      {sale.items.map((item, index) => {
+        const available = (products.find((product) => product.id === item.productId)?.stock ?? 0) + item.quantity
+        return (
+          <label key={`${item.productId}-${index}`} className="flex items-center justify-between gap-3 rounded-md bg-white p-2">
+            <span><b>{item.productName}</b><span className="block text-slate-500">{formatCurrency(item.unitPrice)} · အများဆုံး {available} ခု</span></span>
+            <Input aria-label={`${item.productName} quantity`} type="number" min={0} max={available} step={1} value={quantities[index]} onChange={(event) => setQuantities((current) => current.map((value, position) => position === index ? event.target.value : value))} className="h-8 w-20 text-xs" />
+          </label>
+        )
+      })}
+      <label className="flex items-center justify-between gap-3 rounded-md bg-white p-2">
+        <b>ထုပ်ပိုးစရိတ်</b>
+        <Input aria-label="Packaging cost" type="number" min={0} step="any" value={packaging} onChange={(event) => setPackaging(event.target.value)} className="h-8 w-28 text-xs" />
+      </label>
+      <p className="text-slate-500">အရေအတွက်ကို 0 ထားလျှင် ထိုပစ္စည်းကို ဖယ်ရှားပြီး stock ပြန်ထည့်ပါမည်။</p>
+      {error ? <p role="alert" className="text-red-600">{error}</p> : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} className="h-8 text-xs">မလုပ်တော့ပါ</Button>
+        <Button type="submit" className="h-8 bg-blue-700 text-xs hover:bg-blue-800">သိမ်းမည်</Button>
+      </div>
+    </form>
+  )
+}
+
+export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpdateSale }: DailySalesPageProps) {
   const [dateMode, setDateMode] = useState<'today' | 'yesterday' | 'custom' | 'range'>('today')
   const [customDate, setCustomDate] = useState(today)
   const [rangeStart, setRangeStart] = useState(today)
@@ -106,6 +173,12 @@ export function DailySalesPage({ sales, products, movements }: DailySalesPagePro
   const [reportMonth, setReportMonth] = useState(today.slice(0, 7))
   const [sortBy, setSortBy] = useState<'revenue' | 'quantity' | 'profit'>('revenue')
   const [expandedCategories, setExpandedCategories] = useState<string[]>([])
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null)
+
+  const confirmDeleteSale = (sale: SaleRecord) => {
+    const message = `အရောင်း #${sale.id.slice(-6).toUpperCase()} (${formatCurrency(getSaleRevenue(sale))}) ကို ဖျက်မလား?\nရောင်းထားသောပစ္စည်းများကို stock ထဲ ပြန်ထည့်ပါမည်။`
+    if (window.confirm(message)) onDeleteSale(sale.id)
+  }
 
   const filteredSales = useMemo(() => sales
     .filter((sale) => {
@@ -484,7 +557,22 @@ export function DailySalesPage({ sales, products, movements }: DailySalesPagePro
                   <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] sm:grid-cols-4">
                     <span>ကုန်ပစ္စည်းရောင်းရငွေ <b>{formatCurrency(getSaleRevenue(sale))}</b></span><span>ကုန်ပစ္စည်းအရင်း <b>{profitLabel(getSaleCogs(sale))}</b></span><span>ထုပ်ပိုးစရိတ် <b>{formatCurrency(sale.packagingExpense ?? 0)}</b></span><span>စုစုပေါင်း / အသားတင်အမြတ် <b>{profitLabel(sale.grossProfit ?? (getSaleCogs(sale) === null ? null : getSaleRevenue(sale) - (getSaleCogs(sale) ?? 0)))}</b> / <b>{profitLabel(sale.netProfit ?? (getSaleCogs(sale) === null ? null : getSaleRevenue(sale) - (getSaleCogs(sale) ?? 0) - (sale.packagingExpense ?? 0)))}</b></span>
                   </div>
+                  {sale.cashierEmail ? <p className="mt-2 text-[10px] text-slate-500">ရောင်းသူ · {sale.cashierEmail}</p> : null}
+                  {editingSaleId === sale.id ? null : (
+                    <div className="mt-3 flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setEditingSaleId(sale.id)} className="h-8 gap-1.5 text-xs"><Pencil className="h-3.5 w-3.5" />ပြင်ရန်</Button>
+                      <Button type="button" variant="outline" onClick={() => confirmDeleteSale(sale)} className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" />ဖျက်ရန်</Button>
+                    </div>
+                  )}
                 </div>
+                {editingSaleId === sale.id ? (
+                  <SaleEditor
+                    sale={sale}
+                    products={products}
+                    onSave={(items, packagingExpense) => onUpdateSale(sale.id, items, packagingExpense)}
+                    onCancel={() => setEditingSaleId(null)}
+                  />
+                ) : null}
               </details>)}
             </div>}
           </CardContent>

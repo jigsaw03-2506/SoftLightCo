@@ -11,6 +11,9 @@ export function applySale(
   packagingExpense: number,
   saleId: string,
   cashier: Pick<SaleRecord, 'cashierUid' | 'cashierEmail'> = {},
+  // Used when the owner edits a past sale: keep its original time and prices,
+  // and allow products that were deleted after the sale.
+  original?: { createdAt: string; unitPrices: Record<string, number> },
 ): AppData {
   if (items.length === 0) throw new SaleError('Add at least one item before completing a sale.')
   if (!Number.isFinite(packagingExpense) || packagingExpense < 0) {
@@ -27,7 +30,7 @@ export function applySale(
 
   for (const requested of items) {
     const inventory = products.find((product) => product.id === requested.productId)
-    if (!inventory || inventory.isActive === false || !Number.isInteger(requested.quantity) ||
+    if (!inventory || (!original && inventory.isActive === false) || !Number.isInteger(requested.quantity) ||
       requested.quantity < 1 || requested.quantity > inventory.stock) {
       throw new SaleError('One or more items exceed the available stock.')
     }
@@ -55,7 +58,8 @@ export function applySale(
 
     const incomplete = uncostedQuantity > 0
     hasIncompleteCogs ||= incomplete
-    const revenue = inventory.price * requested.quantity
+    const unitPrice = original?.unitPrices[inventory.id] ?? inventory.price
+    const revenue = unitPrice * requested.quantity
     productRevenue += revenue
     totalCogs += lineCogs
     saleItems.push({
@@ -64,7 +68,7 @@ export function applySale(
       categoryId: inventory.categoryId,
       categoryName: inventory.categoryName ?? inventory.category ?? 'Uncategorized',
       quantity: requested.quantity,
-      unitPrice: inventory.price,
+      unitPrice,
       subtotal: revenue,
       revenue,
       cogs: incomplete ? null : lineCogs,
@@ -94,7 +98,7 @@ export function applySale(
 
   const sale: SaleRecord = {
     id: saleId,
-    createdAt: new Date().toISOString(),
+    createdAt: original?.createdAt ?? new Date().toISOString(),
     ...cashier,
     items: saleItems,
     total: productRevenue,
@@ -113,4 +117,48 @@ export function applySale(
     movements: [...data.movements, ...saleMovements],
     sales: [sale, ...data.sales],
   }
+}
+
+// Puts a sale's items back into stock and into the FIFO batches they were
+// taken from, then removes the sale record.
+export function revertSale(data: AppData, saleId: string, reason: string): AppData {
+  const sale = data.sales.find((item) => item.id === saleId)
+  if (!sale) throw new SaleError('This sale no longer exists.')
+
+  const products = data.products.map((product) => ({ ...product }))
+  const batches = data.batches.map((batch) => ({ ...batch }))
+  const movements = []
+  const label = `Sale #${saleId.slice(-6).toUpperCase()} ${reason}`
+
+  for (const item of sale.items) {
+    for (const allocation of item.batchAllocations ?? []) {
+      const batch = batches.find((entry) => entry.id === allocation.batchId)
+      if (batch) batch.remainingQuantity = Math.min(batch.quantityReceived, batch.remainingQuantity + allocation.quantity)
+    }
+    const product = products.find((entry) => entry.id === item.productId)
+    if (!product) continue
+    movements.push(createMovement(product.id, 'adjustment', item.quantity, product.stock, product.stock + item.quantity, { notes: label }))
+    product.stock += item.quantity
+  }
+
+  return {
+    ...data,
+    products,
+    batches,
+    movements: [...data.movements, ...movements],
+    sales: data.sales.filter((item) => item.id !== saleId),
+  }
+}
+
+export function editSale(data: AppData, saleId: string, items: SaleRequestItem[], packagingExpense: number): AppData {
+  const sale = data.sales.find((item) => item.id === saleId)
+  if (!sale) throw new SaleError('This sale no longer exists.')
+  const unitPrices = Object.fromEntries(sale.items.map((item) => [item.productId, item.unitPrice]))
+  const reverted = revertSale(data, saleId, 'edited')
+  // Firestore rejects undefined fields, so only copy the cashier when present.
+  const cashier = {
+    ...(sale.cashierUid !== undefined ? { cashierUid: sale.cashierUid } : {}),
+    ...(sale.cashierEmail !== undefined ? { cashierEmail: sale.cashierEmail } : {}),
+  }
+  return applySale(reverted, items, packagingExpense, saleId, cashier, { createdAt: sale.createdAt, unitPrices })
 }

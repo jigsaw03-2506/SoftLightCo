@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
-import { Boxes, Clock3, Cloud, CloudOff, LogOut, Menu, PackagePlus, ReceiptText, ShoppingCart, Store } from 'lucide-react'
+import { Boxes, Clock3, Cloud, CloudOff, LogOut, Menu, PackagePlus, ReceiptText, Settings, ShoppingCart, Store } from 'lucide-react'
 import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 
@@ -9,7 +9,7 @@ import { AddProductsPage } from './pages/AddProductsPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { DailySalesPage } from './pages/DailySalesPage'
 import { InventoryPage } from './pages/InventoryPage'
-import { applySale, SaleError } from './lib/sale'
+import { applySale, editSale, revertSale, SaleError, type SaleRequestItem } from './lib/sale'
 import { createBatch, createMovement, loadAdminMode, loadAppData, saveAdminMode, saveAppData } from './lib/storage'
 import type { AppData, CartItem, Category, InventoryBatch, Product } from './types'
 import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet'
@@ -140,6 +140,8 @@ function App() {
   const [toast, setToast] = useState<ToastState | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isNavigationOpen, setIsNavigationOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const settingsMenu = useRef<HTMLDivElement>(null)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>(
     firebaseConfigError ? 'error' : firebaseEnabled ? 'connecting' : 'local',
@@ -156,6 +158,21 @@ function App() {
     const interval = window.setInterval(() => setCurrentTime(new Date()), 60_000)
     return () => window.clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (!isSettingsOpen) return
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !settingsMenu.current?.contains(event.target as Node)) {
+        setIsSettingsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [isSettingsOpen])
 
   const { products, sales, batches, movements, categories } = data
 
@@ -568,6 +585,30 @@ function App() {
     })
   }
 
+  const deleteSale = (saleId: string) => {
+    if (!isAdmin) return false
+    try {
+      const saved = commit(revertSale(data, saleId, 'deleted'))
+      if (saved) showToast('အရောင်းမှတ်တမ်းကို ဖျက်ပြီး stock ပြန်ထည့်လိုက်ပါပြီ။')
+      return saved
+    } catch (error) {
+      showToast(error instanceof SaleError ? error.message : 'Could not delete this sale.', 'error')
+      return false
+    }
+  }
+
+  const updateSale = (saleId: string, items: SaleRequestItem[], packagingExpense: number) => {
+    if (!isAdmin) return false
+    try {
+      const saved = commit(editSale(data, saleId, items, packagingExpense))
+      if (saved) showToast('အရောင်းမှတ်တမ်းကို ပြင်ဆင်ပြီးပါပြီ။')
+      return saved
+    } catch (error) {
+      showToast(error instanceof SaleError ? error.message : 'Could not update this sale.', 'error')
+      return false
+    }
+  }
+
   const changeLowStockThreshold = (threshold: number) => {
     if (!isAdmin || !Number.isInteger(threshold) || threshold < 0) return false
     return commit({ ...data, lowStockThreshold: threshold })
@@ -661,9 +702,34 @@ function App() {
                   </p>
                 </div>
                 {firebaseEnabled ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
-                    <span className={`text-[10px] font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Owner' : 'Staff'}</span>
-                    <button type="button" onClick={() => { if (firebaseAuth) void signOut(firebaseAuth) }} className="rounded p-1 text-slate-500 hover:bg-slate-100" aria-label="Sign out"><LogOut className="h-3.5 w-3.5" /></button>
+                  <div ref={settingsMenu} className="relative">
+                    <button
+                      type="button"
+                      aria-label="Settings"
+                      aria-haspopup="menu"
+                      aria-expanded={isSettingsOpen}
+                      onClick={() => setIsSettingsOpen((open) => !open)}
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 ${isSettingsOpen ? 'bg-slate-100' : 'bg-white'}`}
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                    {isSettingsOpen ? (
+                      <div role="menu" className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                        <div className="border-b border-slate-100 px-4 py-3">
+                          <p className="text-[10px] text-slate-500">ဝင်ထားသောအကောင့်</p>
+                          <p className="mt-0.5 truncate text-xs font-semibold text-slate-900" title={firebaseUser?.email ?? ''}>{firebaseUser?.email}</p>
+                          <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${isAdmin ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{isAdmin ? 'Owner' : 'Staff'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => { setIsSettingsOpen(false); if (firebaseAuth) void signOut(firebaseAuth) }}
+                          className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />အကောင့်ထွက်ရန်
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
@@ -681,7 +747,7 @@ function App() {
                 <Route path="/" element={<CheckoutPage products={products.filter((product) => product.isActive !== false)} cart={cart} onAddToCart={addToCart} onIncrease={onIncrease} onDecrease={onDecrease} onRemove={onRemove} onClearCart={() => { checkoutRequestId.current = null; setCart([]) }} onCheckout={onCheckout} isProcessing={isProcessing} />} />
                 <Route path="/products" element={isAdmin ? <AddProductsPage products={products.filter((product) => product.isActive !== false)} categories={categories} isAdmin={isAdmin} onSaveProduct={saveProduct} onShowToast={showToast} /> : <Navigate to="/" replace />} />
                 <Route path="/inventory" element={isAdmin ? <InventoryPage products={products} categories={categories} batches={batches} movements={movements} isAdmin={isAdmin} lowStockThreshold={data.lowStockThreshold} onLowStockThresholdChange={changeLowStockThreshold} onDeleteProduct={deleteProduct} onRestock={restock} onAdjustStock={adjustStock} onEditBatch={editBatch} onAddCategory={addCategory} onRenameCategory={renameCategory} onShowToast={showToast} /> : <Navigate to="/" replace />} />
-                <Route path="/sales" element={isAdmin ? <DailySalesPage sales={sales} products={products} movements={movements} /> : <Navigate to="/" replace />} />
+                <Route path="/sales" element={isAdmin ? <DailySalesPage sales={sales} products={products} movements={movements} onDeleteSale={deleteSale} onUpdateSale={updateSale} /> : <Navigate to="/" replace />} />
               </Routes>
             </main>
           </div>
@@ -708,7 +774,18 @@ function App() {
                   <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-5' : 'left-1'}`} />
                 </button>
               </div>
-            ) : <button type="button" onClick={() => { if (firebaseAuth) void signOut(firebaseAuth) }} className="mt-5 flex w-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 text-left text-xs font-medium text-slate-700"><LogOut className="h-4 w-4" />Sign out</button>}
+            ) : (
+              <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-3">
+                  <Settings className="h-4 w-4 shrink-0 text-slate-500" />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-slate-900">{firebaseUser?.email}</p>
+                    <p className={`text-[10px] font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Owner' : 'Staff'}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => { if (firebaseAuth) void signOut(firebaseAuth) }} className="flex w-full items-center gap-2 px-3 py-3 text-left text-xs font-medium text-red-600"><LogOut className="h-4 w-4" />အကောင့်ထွက်ရန်</button>
+              </div>
+            )}
             <p className={`mt-3 flex items-center gap-2 px-3 text-xs ${cloudStatus === 'connected' ? 'text-emerald-700' : cloudStatus === 'error' ? 'text-red-600' : 'text-slate-500'}`}>
               {cloudStatus === 'error' ? <CloudOff className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
               {cloudStatusLabel}
