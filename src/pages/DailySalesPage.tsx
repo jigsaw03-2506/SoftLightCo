@@ -545,7 +545,35 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
                   <span>ကုန်ပစ္စည်းအရင်း {profitLabel(getSaleCogs(sale))}</span>
                   <span>စုစုပေါင်းအမြတ် {profitLabel(sale.grossProfit ?? (getSaleCogs(sale) === null ? null : getSaleRevenue(sale) - (getSaleCogs(sale) ?? 0)))}</span>
                   <span className="text-violet-700">အသားတင်အမြတ် {profitLabel(sale.netProfit ?? (getSaleCogs(sale) === null ? null : getSaleRevenue(sale) - (getSaleCogs(sale) ?? 0) - (sale.packagingExpense ?? 0)))}</span>
-                  <span className="text-blue-700">အသေးစိတ်ကြည့်ရန်</span>
+                  <span className="flex items-start gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={`Edit sale ${sale.id.slice(-6).toUpperCase()}`}
+                      title="ပြင်ရန်"
+                      onClick={(event) => {
+                        // Keep the summary click from toggling the row, and open it to show the editor.
+                        event.preventDefault()
+                        const details = event.currentTarget.closest('details')
+                        if (details) details.open = true
+                        setEditingSaleId(sale.id)
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete sale ${sale.id.slice(-6).toUpperCase()}`}
+                      title="ဖျက်ရန်"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        confirmDeleteSale(sale)
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
                 </summary>
                 <div className="border-t border-slate-100 p-3">
                   {sale.items.map((item, index) => <div key={`${item.productId}-${index}`} className="grid grid-cols-2 gap-2 border-b border-slate-100 py-2 text-[10px] sm:grid-cols-4">
@@ -558,12 +586,6 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
                     <span>ကုန်ပစ္စည်းရောင်းရငွေ <b>{formatCurrency(getSaleRevenue(sale))}</b></span><span>ကုန်ပစ္စည်းအရင်း <b>{profitLabel(getSaleCogs(sale))}</b></span><span>ထုပ်ပိုးစရိတ် <b>{formatCurrency(sale.packagingExpense ?? 0)}</b></span><span>စုစုပေါင်း / အသားတင်အမြတ် <b>{profitLabel(sale.grossProfit ?? (getSaleCogs(sale) === null ? null : getSaleRevenue(sale) - (getSaleCogs(sale) ?? 0)))}</b> / <b>{profitLabel(sale.netProfit ?? (getSaleCogs(sale) === null ? null : getSaleRevenue(sale) - (getSaleCogs(sale) ?? 0) - (sale.packagingExpense ?? 0)))}</b></span>
                   </div>
                   {sale.cashierEmail ? <p className="mt-2 text-[10px] text-slate-500">ရောင်းသူ · {sale.cashierEmail}</p> : null}
-                  {editingSaleId === sale.id ? null : (
-                    <div className="mt-3 flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setEditingSaleId(sale.id)} className="h-8 gap-1.5 text-xs"><Pencil className="h-3.5 w-3.5" />ပြင်ရန်</Button>
-                      <Button type="button" variant="outline" onClick={() => confirmDeleteSale(sale)} className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" />ဖျက်ရန်</Button>
-                    </div>
-                  )}
                 </div>
                 {editingSaleId === sale.id ? (
                   <SaleEditor

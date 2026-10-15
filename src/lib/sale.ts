@@ -56,7 +56,12 @@ export function applySale(
       allocations.push({ batchId: batch.id, quantity, unitPurchaseCost: batch.unitPurchaseCost, totalCost })
     }
 
-    const incomplete = uncostedQuantity > 0
+    // Stock without a recorded batch falls back to the product's purchase price.
+    const fallbackCost = typeof inventory.purchasePrice === 'number' && Number.isFinite(inventory.purchasePrice) && inventory.purchasePrice >= 0
+      ? inventory.purchasePrice
+      : null
+    if (uncostedQuantity > 0 && fallbackCost !== null) lineCogs += uncostedQuantity * fallbackCost
+    const incomplete = uncostedQuantity > 0 && fallbackCost === null
     hasIncompleteCogs ||= incomplete
     const unitPrice = original?.unitPrices[inventory.id] ?? inventory.price
     const revenue = unitPrice * requested.quantity
@@ -79,9 +84,9 @@ export function applySale(
     let movementStock = inventory.stock
     if (uncostedQuantity > 0) {
       const nextStock = movementStock - uncostedQuantity
-      saleMovements.push(createMovement(inventory.id, 'sale', -uncostedQuantity, movementStock, nextStock, {
-        notes: `Sale ${saleId}; cost unavailable for opening stock`,
-      }))
+      saleMovements.push(createMovement(inventory.id, 'sale', -uncostedQuantity, movementStock, nextStock, fallbackCost === null
+        ? { notes: `Sale ${saleId}; cost unavailable for opening stock` }
+        : { unitPurchaseCost: fallbackCost, notes: `Sale ${saleId}; costed at product purchase price` }))
       movementStock = nextStock
     }
     for (const allocation of allocations) {

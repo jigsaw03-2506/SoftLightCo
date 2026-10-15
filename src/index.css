@@ -56,3 +56,13 @@ img {
     font-size: 16px !important;
   }
 }
+
+/* Phones zoom into any focused field with text under 16px. Inputs here use
+   small Tailwind text sizes, so force 16px on small screens to stop it. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
