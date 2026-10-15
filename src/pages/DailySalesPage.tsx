@@ -229,10 +229,11 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
   const monthlyCogs = monthlyCostsIncomplete ? null : monthlySales.reduce((sum, sale) => sum + (getSaleCogs(sale) ?? 0), 0)
   const monthlyGrossProfit = monthlyCogs === null ? null : monthlyRevenue - monthlyCogs
   const monthlyNetProfit = monthlyGrossProfit === null ? null : monthlyGrossProfit - monthlyPackaging
-  const monthlyRestocks = useMemo(
-    () => monthlyMovements.filter((movement) => movement.type === 'restock' && movement.quantityChange > 0),
-    [monthlyMovements],
-  )
+  // Deleted products are only hidden, so their restocks would otherwise keep counting here.
+  const monthlyRestocks = useMemo(() => {
+    const activeIds = new Set(products.filter((product) => product.isActive !== false).map((product) => product.id))
+    return monthlyMovements.filter((movement) => movement.type === 'restock' && movement.quantityChange > 0 && activeIds.has(movement.productId))
+  }, [monthlyMovements, products])
   const monthlyRestockCost = monthlyRestocks.reduce((sum, movement) => sum + movement.quantityChange * (movement.unitPurchaseCost ?? 0), 0)
   const monthlyRestockUnits = monthlyRestocks.reduce((sum, movement) => sum + movement.quantityChange, 0)
   const monthlyCashiers = useMemo(() => {
