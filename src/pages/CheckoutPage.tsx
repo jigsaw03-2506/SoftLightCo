@@ -19,7 +19,7 @@ type CheckoutPageProps = {
   onDecrease: (productId: string) => void;
   onRemove: (productId: string) => void;
   onClearCart: () => void;
-  onCheckout: (packagingExpense: number) => boolean;
+  onCheckout: (packagingExpense: number) => boolean | Promise<boolean>;
   isProcessing: boolean;
 };
 
@@ -48,8 +48,8 @@ export function CheckoutPage({
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const handleCheckout = () => {
-    const saved = onCheckout(Number(packagingExpense));
+  const handleCheckout = async () => {
+    const saved = await onCheckout(Number(packagingExpense));
     if (saved) setPackagingExpense("0");
     return saved;
   };
@@ -208,8 +208,8 @@ export function CheckoutPage({
           <CartPanel
             {...cartPanelProps}
             className="min-h-0 flex-1"
-            onCheckout={() => {
-              if (handleCheckout()) setIsCartOpen(false);
+            onCheckout={async () => {
+              if (await handleCheckout()) setIsCartOpen(false);
             }}
           />
         </SheetContent>

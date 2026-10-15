@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isOwner() {
+      return signedIn() && role() == 'owner';
+    }
+
+    function isShopUser() {
+      return signedIn() && role() in ['owner', 'staff'];
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow list: if isOwner();
+      allow write: if false;
+    }
+
+    // Owner and (trusted) staff share the shop document. Staff only see the
+    // checkout page in the app; checkout runs as a client-side transaction so
+    // the free Spark plan is enough (no Cloud Functions).
+    match /softlight-pos/main {
+      allow get: if isShopUser();
+      allow list: if false;
+      allow write: if isShopUser();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

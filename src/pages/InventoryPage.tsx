@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Boxes, ClipboardList, PackagePlus, Pencil, Plus, Scale, Tags, X } from 'lucide-react'
+import { useState } from 'react'
+import { Boxes, ClipboardList, PackagePlus, Pencil, Plus, Scale, Tags, Trash2, X } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -15,8 +15,8 @@ type InventoryPageProps = {
   isAdmin: boolean
   lowStockThreshold: number
   onLowStockThresholdChange: (threshold: number) => boolean
+  onDeleteProduct: (productId: string) => boolean
   onRestock: (productId: string, quantity: number, unitCost: number, receivedAt: string, supplier: string, notes: string) => boolean
-  onSetOpeningCost: (productId: string, unitCost: number, receivedAt: string, notes: string) => boolean
   onAdjustStock: (productId: string, newStock: number, reason: string, unitCost: number | null) => boolean
   onEditBatch: (batch: InventoryBatch, updates: Pick<InventoryBatch, 'quantityReceived' | 'unitPurchaseCost' | 'receivedAt' | 'supplier' | 'notes'>) => boolean
   onAddCategory: (name: string) => boolean
@@ -25,7 +25,7 @@ type InventoryPageProps = {
 }
 
 type DialogState =
-  | { kind: 'restock' | 'opening' | 'adjust'; product: Product }
+  | { kind: 'restock' | 'adjust'; product: Product }
   | { kind: 'history'; product: Product }
   | { kind: 'edit-batch'; product: Product; batch: InventoryBatch }
   | null
@@ -43,8 +43,8 @@ export function InventoryPage({
   isAdmin,
   lowStockThreshold,
   onLowStockThresholdChange,
+  onDeleteProduct,
   onRestock,
-  onSetOpeningCost,
   onAdjustStock,
   onEditBatch,
   onAddCategory,
@@ -60,14 +60,6 @@ export function InventoryPage({
   const [categoryName, setCategoryName] = useState('')
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editingCategoryName, setEditingCategoryName] = useState('')
-
-  const remainingByProduct = useMemo(() => {
-    const map = new Map<string, InventoryBatch[]>()
-    for (const batch of batches) {
-      map.set(batch.productId, [...(map.get(batch.productId) ?? []), batch])
-    }
-    return map
-  }, [batches])
 
   const beginDialog = (next: Exclude<DialogState, null>) => {
     setDialog(next)
@@ -87,20 +79,17 @@ export function InventoryPage({
     const receivedDate = new Date(`${receivedAt}T12:00:00`).toISOString()
     let succeeded = false
 
-    if (!Number.isFinite(cost) || cost < 0) {
-      onShowToast('Enter a valid non-negative purchase cost.', 'error')
-      return
-    }
-
     if (dialog.kind === 'restock') {
       const amount = Number(quantity)
       if (!Number.isInteger(amount) || amount <= 0) {
         onShowToast('Quantity to add must be a positive whole number.', 'error')
         return
       }
+      if (!Number.isFinite(cost) || cost < 0) {
+        onShowToast('Enter a valid non-negative purchase cost.', 'error')
+        return
+      }
       succeeded = onRestock(dialog.product.id, amount, cost, receivedDate, supplier, notes)
-    } else if (dialog.kind === 'opening') {
-      succeeded = onSetOpeningCost(dialog.product.id, cost, receivedDate, notes)
     } else {
       const newStock = Number(quantity)
       if (!Number.isInteger(newStock) || newStock < 0) {
@@ -111,13 +100,23 @@ export function InventoryPage({
         onShowToast('Enter the reason for this stock adjustment.', 'error')
         return
       }
+      if (newStock > dialog.product.stock && (!Number.isFinite(cost) || cost < 0)) {
+        onShowToast('Enter a valid non-negative purchase cost for added stock.', 'error')
+        return
+      }
       succeeded = onAdjustStock(dialog.product.id, newStock, notes, cost)
     }
 
     if (succeeded) {
-      onShowToast(dialog.kind === 'restock' ? 'Stock replenished and batch recorded.' : dialog.kind === 'opening' ? 'Opening stock cost recorded.' : 'Stock adjustment recorded.')
+      onShowToast(dialog.kind === 'restock' ? 'Stock replenished and batch recorded.' : 'Stock adjustment recorded.')
       closeDialog()
     }
+  }
+
+  const deleteProduct = (product: Product) => {
+    if (!isAdmin) return
+    if (!window.confirm(`Delete ${product.name} from inventory? Historical sales will be preserved.`)) return
+    if (onDeleteProduct(product.id)) onShowToast('Product removed from inventory.')
   }
 
   const handleAddCategory = (event: React.FormEvent<HTMLFormElement>) => {
@@ -165,6 +164,7 @@ export function InventoryPage({
 
   const productBatches = dialog && (dialog.kind === 'history' || dialog.kind === 'edit-batch') ? batches.filter((batch) => batch.productId === dialog.product.id) : []
   const productMovements = dialog?.kind === 'history' ? movements.filter((movement) => movement.productId === dialog.product.id) : []
+  const activeProducts = products.filter((product) => product.isActive !== false)
 
   return (
     <div className="space-y-4">
@@ -181,42 +181,36 @@ export function InventoryPage({
 
       <Card>
         <CardHeader className="p-4 pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm"><Boxes className="h-4 w-4" />Inventory overview</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-sm"><Boxes className="h-4 w-4" />Inventory overview ({activeProducts.length})</CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4">
           {isAdmin ? <div className="mb-3 flex items-center gap-2 text-[10px] text-slate-600"><label htmlFor="low-stock-threshold">Low-stock warning at</label><Input id="low-stock-threshold" type="number" min="0" step="1" value={lowStockThreshold} onChange={(event) => { const value = Number(event.target.value); if (Number.isInteger(value) && value >= 0) onLowStockThresholdChange(value) }} className="h-8 w-20 text-xs" /><span>units</span></div> : null}
-          <div className="space-y-2">
-            {products.map((product) => {
-              const productBatches = remainingByProduct.get(product.id) ?? []
-              const costedStock = productBatches.reduce((sum, batch) => sum + batch.remainingQuantity, 0)
-              const inventoryCost = productBatches.reduce((sum, batch) => sum + batch.remainingQuantity * batch.unitPurchaseCost, 0)
-              const hasUncostedStock = costedStock < product.stock
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {activeProducts.map((product) => {
+              const stockTone = product.stock > 10
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : product.stock > 5
+                  ? 'border-orange-200 bg-orange-50 text-orange-700'
+                  : 'border-red-200 bg-red-50 text-red-700'
               return (
-                <div key={product.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
+                <article key={product.id} className="flex min-w-0 flex-col rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="mb-2 flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-semibold text-slate-900">{product.name}</p>
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-600">{product.categoryName ?? product.category ?? 'Uncategorized'}</span>
-                      {product.isActive === false ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-600">Inactive</span> : null}
-                      {product.stock <= 0 ? <span className="rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-medium text-red-700">Out of stock</span> : null}
-                      {product.stock > 0 && product.stock <= lowStockThreshold ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">Low stock</span> : null}
+                      <p className="mt-0.5 truncate text-[10px] text-slate-500">{product.categoryName ?? product.category ?? 'Uncategorized'}</p>
                     </div>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      Stock {product.stock} · Selling {formatCurrency(product.price)} · Inventory cost {hasUncostedStock ? `${formatCurrency(inventoryCost)} + uncosted stock` : formatCurrency(inventoryCost)}
-                    </p>
+                    <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${stockTone}`} aria-label={`Stock ${product.stock}`}>
+                      {product.stock} in stock
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {isAdmin && product.isActive !== false && product.stock > costedStock ? (
-                      <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[10px]" onClick={() => beginDialog({ kind: 'opening', product })}>
-                        <Scale className="h-3 w-3" /> Set opening cost
-                      </Button>
-                    ) : null}
-                    {isAdmin && product.isActive !== false ? (
+                  <p className="mb-3 text-[10px] text-slate-600">Selling price · {formatCurrency(product.price)}</p>
+                  <div className="mt-auto flex flex-wrap gap-1.5">
+                    {isAdmin ? (
                       <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[10px]" onClick={() => beginDialog({ kind: 'restock', product })}>
                         <PackagePlus className="h-3 w-3" /> Restock
                       </Button>
                     ) : null}
-                    {isAdmin && product.isActive !== false ? (
+                    {isAdmin ? (
                       <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[10px]" onClick={() => beginDialog({ kind: 'adjust', product })}>
                         <Scale className="h-3 w-3" /> Adjust
                       </Button>
@@ -224,10 +218,16 @@ export function InventoryPage({
                     <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-[10px]" onClick={() => setDialog({ kind: 'history', product })}>
                       <ClipboardList className="h-3 w-3" /> History
                     </Button>
+                    {isAdmin ? (
+                      <Button size="sm" variant="outline" className="h-8 gap-1 border-red-200 px-2 text-[10px] text-red-600 hover:bg-red-50" onClick={() => deleteProduct(product)}>
+                        <Trash2 className="h-3 w-3" /> Delete
+                      </Button>
+                    ) : null}
                   </div>
-                </div>
+                </article>
               )
             })}
+            {activeProducts.length === 0 ? <p className="col-span-full rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">No active inventory items.</p> : null}
           </div>
         </CardContent>
       </Card>
@@ -270,7 +270,7 @@ export function InventoryPage({
             <div className="mb-3 flex items-start justify-between">
               <div>
                 <h2 id="inventory-dialog-title" className="text-sm font-semibold text-slate-900">
-                  {dialog.kind === 'history' ? `${dialog.product.name} history` : dialog.kind === 'restock' ? 'Restock product' : dialog.kind === 'opening' ? 'Set opening-stock cost' : 'Adjust stock'}
+                  {dialog.kind === 'history' ? `${dialog.product.name} history` : dialog.kind === 'restock' ? 'Restock product' : 'Adjust stock'}
                 </h2>
                 {dialog.kind === 'history' ? <p className="mt-1 text-[10px] text-slate-500">{dialog.product.categoryName ?? dialog.product.category ?? 'Uncategorized'}</p> : null}
                 {dialog.kind !== 'history' ? <p className="mt-1 text-[10px] text-slate-500">{dialog.product.name} · Current stock {dialog.product.stock}</p> : null}
@@ -282,7 +282,7 @@ export function InventoryPage({
               <div className="space-y-4">
                 <section>
                   <h3 className="mb-2 text-xs font-semibold text-slate-800">Purchase batches</h3>
-                  {productBatches.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-[10px] text-amber-800">No cost batches recorded. Existing stock needs an opening-stock cost before profit can be calculated.</p> : (
+                  {productBatches.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-[10px] text-amber-800">No cost batches recorded. Sales from this stock are recorded without a profit calculation.</p> : (
                     <div className="space-y-2">{productBatches.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt)).map((batch) => <div key={batch.id} className="rounded-lg border border-slate-200 p-2.5 text-[10px]"><div className="flex items-start justify-between gap-2"><div><div className="flex justify-between gap-2 font-medium"><span>{batch.openingStock ? 'Opening stock' : `${batch.quantityReceived} received`} · {formatDateTime(batch.receivedAt)}</span><span>{formatCurrency(batch.unitPurchaseCost)} / unit</span></div><p className="mt-1 text-slate-500">Remaining {batch.remainingQuantity} of {batch.quantityReceived} · Batch total {formatCurrency(batch.quantityReceived * batch.unitPurchaseCost)}</p>{batch.supplier ? <p className="text-slate-500">Supplier: {batch.supplier}</p> : null}{batch.notes ? <p className="text-slate-500">{batch.notes}</p> : null}</div>{isAdmin ? <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 gap-1 px-2 text-[10px]" onClick={() => { setDialog({ kind: 'edit-batch', product: dialog.product, batch }); setQuantity(String(batch.quantityReceived)); setUnitCost(String(batch.unitPurchaseCost)); setReceivedAt(batch.receivedAt.slice(0, 10)); setSupplier(batch.supplier ?? ''); setNotes(batch.notes ?? '') }}><Pencil className="h-3 w-3" />Edit</Button> : null}</div></div>)}</div>
                   )}
                 </section>
@@ -303,17 +303,15 @@ export function InventoryPage({
               </form>
             ) : (
               <form onSubmit={submitStockAction} className="space-y-3">
-                {dialog.kind !== 'opening' ? (
-                  <div className="space-y-1">
-                    <label htmlFor="inventory-quantity" className="text-[10px] font-medium text-slate-700">{dialog.kind === 'restock' ? 'Quantity to add' : 'New available stock'}</label>
-                    <Input id="inventory-quantity" type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-9 text-xs" />
-                  </div>
-                ) : <p className="rounded bg-amber-50 p-2 text-[10px] text-amber-800">This creates a cost batch for the current uncosted stock of {dialog.product.stock} units. It does not change stock quantity.</p>}
-                {dialog.kind !== 'adjust' || Number(quantity) > dialog.product.stock ? <div className="space-y-1">
+                <div className="space-y-1">
+                  <label htmlFor="inventory-quantity" className="text-[10px] font-medium text-slate-700">{dialog.kind === 'restock' ? 'Quantity to add' : 'New available stock'}</label>
+                  <Input id="inventory-quantity" type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-9 text-xs" />
+                </div>
+                {dialog.kind === 'restock' || Number(quantity) > dialog.product.stock ? <div className="space-y-1">
                   <label htmlFor="inventory-cost" className="text-[10px] font-medium text-slate-700">Purchase cost per unit (Ks)</label>
-                  <Input id="inventory-cost" type="number" min="0" step="any" required={dialog.kind !== 'adjust' || Number(quantity) > dialog.product.stock} value={unitCost} onChange={(event) => setUnitCost(event.target.value)} className="h-9 text-xs" />
+                  <Input id="inventory-cost" type="number" min="0" step="any" required value={unitCost} onChange={(event) => setUnitCost(event.target.value)} className="h-9 text-xs" />
                 </div> : null}
-                {dialog.kind !== 'adjust' ? (
+                {dialog.kind === 'restock' ? (
                   <>
                     <div className="space-y-1">
                       <label htmlFor="received-date" className="text-[10px] font-medium text-slate-700">Received date</label>
@@ -328,7 +326,7 @@ export function InventoryPage({
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
                   <Button type="button" variant="outline" size="sm" onClick={closeDialog}>Cancel</Button>
-                  <Button type="submit" size="sm" className="bg-blue-700 hover:bg-blue-800">{dialog.kind === 'restock' ? 'Record restock' : dialog.kind === 'opening' ? 'Save opening cost' : 'Save adjustment'}</Button>
+                  <Button type="submit" size="sm" className="bg-blue-700 hover:bg-blue-800">{dialog.kind === 'restock' ? 'Record restock' : 'Save adjustment'}</Button>
                 </div>
               </form>
             )}

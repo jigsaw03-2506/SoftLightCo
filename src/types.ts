@@ -47,6 +47,8 @@ export type SaleItem = {
 export type SaleRecord = {
   id: string
   createdAt: string
+  cashierUid?: string
+  cashierEmail?: string
   items: SaleItem[]
   total: number
   itemCount: number

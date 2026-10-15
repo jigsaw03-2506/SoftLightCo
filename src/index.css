@@ -47,3 +47,12 @@ img {
   min-height: 100dvh;
   overflow: visible;
 }
+
+/* iOS Safari zooms into inputs smaller than 16px; keep form text at 16px on touch screens. */
+@media (max-width: 1023px), (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

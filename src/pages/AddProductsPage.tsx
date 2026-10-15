@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, PencilLine, Plus, Trash2 } from 'lucide-react'
+import { ImagePlus, PencilLine, Plus } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -15,7 +15,6 @@ type AddProductsPageProps = {
   categories: Category[]
   isAdmin: boolean
   onSaveProduct: (product: Product, isEditing: boolean, purchasePrice: number) => boolean
-  onDeleteProduct: (productId: string) => void
   onShowToast: (message: string, type?: 'success' | 'error') => void
 }
 
@@ -35,7 +34,6 @@ export function AddProductsPage({
   categories,
   isAdmin,
   onSaveProduct,
-  onDeleteProduct,
   onShowToast,
 }: AddProductsPageProps) {
   const [form, setForm] = useState<ProductFormState>(emptyForm)
@@ -145,24 +143,6 @@ export function AddProductsPage({
       image: product.image ?? '',
     })
     setImageError('')
-  }
-
-  const handleDelete = (productId: string) => {
-    const product = products.find((item) => item.id === productId)
-    if (!product) {
-      return
-    }
-
-    const confirmed = window.confirm(`Delete ${product.name}? This will not change historical sales.`)
-    if (!confirmed) {
-      return
-    }
-
-    onDeleteProduct(productId)
-    if (editingId === productId) {
-      resetForm()
-    }
-    onShowToast('Product removed from inventory.', 'success')
   }
 
   return (
@@ -337,9 +317,6 @@ export function AddProductsPage({
                   {isAdmin ? <div className="flex items-center gap-2">
                     <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-[10px]" onClick={() => handleEdit(product)}>
                       Edit
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-8 gap-1 border-red-200 px-2 text-[10px] text-red-600 hover:bg-red-50" onClick={() => handleDelete(product.id)}>
-                      <Trash2 className="h-3 w-3" /> Delete
                     </Button>
                   </div>
                   : null}

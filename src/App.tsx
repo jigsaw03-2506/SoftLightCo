@@ -1,65 +1,156 @@
 import { useEffect, useRef, useState } from 'react'
-import { BrowserRouter, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Boxes, Clock3, Menu, PackagePlus, ReceiptText, ShoppingCart, Store } from 'lucide-react'
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { Boxes, Clock3, Cloud, CloudOff, LogOut, Menu, PackagePlus, ReceiptText, ShoppingCart, Store } from 'lucide-react'
+import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
+import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 
+import { Button } from './components/ui/button'
 import { AddProductsPage } from './pages/AddProductsPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { DailySalesPage } from './pages/DailySalesPage'
 import { InventoryPage } from './pages/InventoryPage'
+import { applySale, SaleError } from './lib/sale'
 import { createBatch, createMovement, loadAdminMode, loadAppData, saveAdminMode, saveAppData } from './lib/storage'
-import { formatCurrency } from './lib/utils'
-import type { AppData, CartItem, Category, InventoryBatch, Product, SaleRecord } from './types'
+import type { AppData, CartItem, Category, InventoryBatch, Product } from './types'
 import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet'
-import { createPortal } from 'react-dom'
+import { firebaseAuth, firebaseConfigError, firestoreDb } from './lib/firebase'
 
 type ToastState = {
   message: string
   type: 'success' | 'error'
 }
 
-function MobileCartShortcut({ cart }: { cart: CartItem[] }) {
-  const location = useLocation()
-  const navigate = useNavigate()
-  if (location.pathname === '/') return null
+type CloudStatus = 'local' | 'connecting' | 'syncing' | 'connected' | 'error'
+type UserRole = 'owner' | 'staff'
 
-  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+const emptyAppData: AppData = {
+  version: 2,
+  products: [],
+  categories: [],
+  batches: [],
+  movements: [],
+  sales: [],
+  lowStockThreshold: 5,
+}
 
-  return createPortal(
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.06)] md:hidden">
-      <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] text-slate-500">{itemCount} items in cart</p>
-          <p className="text-sm font-bold leading-tight text-slate-900">{formatCurrency(total)}</p>
+function isAppData(value: unknown): value is AppData {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<AppData>
+  return candidate.version === 2 &&
+    Array.isArray(candidate.products) &&
+    Array.isArray(candidate.categories) &&
+    Array.isArray(candidate.batches) &&
+    Array.isArray(candidate.movements) &&
+    Array.isArray(candidate.sales)
+}
+
+class CloudConflictError extends Error {}
+
+function SignInScreen({
+  user,
+  message,
+  onSignedOut,
+}: {
+  user: User | null
+  message: string
+  onSignedOut: () => void
+}) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [pending, setPending] = useState(false)
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!firebaseAuth) return
+    setPending(true)
+    setError('')
+    setNotice('')
+    try {
+      await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
+    } catch (cause) {
+      console.error('Unable to sign in to Firebase Authentication.', cause)
+      setError('အီးမေးလ် သို့မဟုတ် စကားဝှက် မှားနေပါသည်။')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const resetPassword = async () => {
+    if (!firebaseAuth || !email.trim()) {
+      setError('Password ပြန်သတ်မှတ်ရန် အီးမေးလ်ကို အရင်ထည့်ပါ။')
+      return
+    }
+    setPending(true)
+    setError('')
+    try {
+      await sendPasswordResetEmail(firebaseAuth, email.trim())
+      setNotice('Password reset link ကို အီးမေးလ်သို့ ပို့လိုက်ပါပြီ။')
+    } catch (cause) {
+      console.error('Unable to send a Firebase password reset email.', cause)
+      setError('Password reset အီးမေးလ်ပို့မရပါ။ အီးမေးလ်ကို စစ်ဆေးပါ။')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-slate-100 p-4">
+      <section className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-400 text-amber-950"><Store className="h-5 w-5" /></div>
+          <div><h1 className="text-base font-bold text-slate-900">SoftLight Co.</h1><p className="text-xs text-slate-500">ဝန်ထမ်းအကောင့်ဖြээр ဝင်ပါ</p></div>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate('/?showCart=1')}
-          className="flex h-10 min-w-32 items-center justify-center gap-1.5 rounded-md bg-blue-700 px-4 text-xs font-medium text-white hover:bg-blue-800"
-        >
-          <ShoppingCart className="h-3.5 w-3.5" />
-          Cart / Checkout
-          {itemCount > 0 ? (
-            <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-blue-700">
-              {itemCount}
-            </span>
-          ) : null}
-        </button>
-      </div>
-    </div>,
-    document.body,
+        {message ? <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{message}</p> : null}
+        {user ? (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600">{user.email} အကောင့်အတွက် access role မရှိပါ။ Owner ထံဆက်သွယ်ပါ။</p>
+            <Button type="button" variant="outline" className="w-full" onClick={onSignedOut}>အကောင့်ထွက်ရန်</Button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <label className="block space-y-1 text-xs font-medium text-slate-700">အီးမေးလ်
+              <input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} className="h-11 w-full rounded-md border border-slate-300 px-3 text-base font-normal" />
+            </label>
+            <label className="block space-y-1 text-xs font-medium text-slate-700">စကားဝှက်
+              <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="h-11 w-full rounded-md border border-slate-300 px-3 text-base font-normal" />
+            </label>
+            {error ? <p role="alert" className="text-xs text-red-600">{error}</p> : null}
+            {notice ? <p role="status" className="text-xs text-emerald-700">{notice}</p> : null}
+            <Button type="submit" disabled={pending} className="h-11 w-full bg-blue-700 text-sm hover:bg-blue-800">{pending ? 'စစ်ဆေးနေသည်…' : 'ဝင်မည်'}</Button>
+            <button type="button" disabled={pending} onClick={resetPassword} className="w-full py-1 text-xs text-blue-700 hover:underline">စကားဝှက် မေ့နေပါသလား?</button>
+          </form>
+        )}
+      </section>
+    </main>
   )
 }
 
 function App() {
-  const [data, setData] = useState<AppData>(() => loadAppData())
-  const [isAdmin, setIsAdmin] = useState(() => loadAdminMode())
+  const firebaseEnabled = Boolean(firestoreDb && firebaseAuth)
+  const [data, setData] = useState<AppData>(() => firebaseEnabled || firebaseConfigError ? emptyAppData : loadAppData())
+  const [localIsAdmin, setLocalIsAdmin] = useState(() => loadAdminMode())
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null)
+  const [userRole, setUserRole] = useState<UserRole | null>(null)
+  const [authLoading, setAuthLoading] = useState(firebaseEnabled)
+  const [authError, setAuthError] = useState('')
+  const isAdmin = firebaseEnabled ? userRole === 'owner' : localIsAdmin
   const [cart, setCart] = useState<CartItem[]>([])
   const [toast, setToast] = useState<ToastState | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isNavigationOpen, setIsNavigationOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>(
+    firebaseConfigError ? 'error' : firebaseEnabled ? 'connecting' : 'local',
+  )
   const checkoutLock = useRef(false)
+  const checkoutRequestId = useRef<{ payload: string; id: string } | null>(null)
+  const cloudSyncReady = useRef(false)
+  const lastCloudData = useRef<string | null>(null)
+  const lastCloudRevision = useRef(0)
+  const cloudWriteQueue = useRef(Promise.resolve())
+  const authGeneration = useRef(0)
 
   useEffect(() => {
     const interval = window.setInterval(() => setCurrentTime(new Date()), 60_000)
@@ -74,6 +165,10 @@ function App() {
   }
 
   const commit = (next: AppData) => {
+    if (firebaseEnabled && !isAdmin) {
+      showToast('Only the owner can change inventory or reports.', 'error')
+      return false
+    }
     try {
       saveAppData(next)
       setData(next)
@@ -85,10 +180,161 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (!firebaseAuth || !firestoreDb) return
+    const db = firestoreDb
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+      const generation = ++authGeneration.current
+      setFirebaseUser(user)
+      setUserRole(null)
+      setAuthError('')
+      setAuthLoading(true)
+      setData(emptyAppData)
+      setCart([])
+      checkoutRequestId.current = null
+      cloudSyncReady.current = false
+      lastCloudData.current = null
+      lastCloudRevision.current = 0
+      if (!user) {
+        setAuthLoading(false)
+        setCloudStatus('connecting')
+        return
+      }
+      try {
+        const profile = await getDoc(doc(db, 'users', user.uid))
+        if (generation !== authGeneration.current) return
+        const role = profile.data()?.role
+        if (!profile.exists() || (role !== 'owner' && role !== 'staff')) {
+          setAuthError('ဤအကောင့်တွင် သတ်မှတ်ထားသော owner/staff role မရှိပါ။')
+          setCloudStatus('error')
+          return
+        }
+        setUserRole(role)
+        setCloudStatus('connecting')
+      } catch (error) {
+        if (generation !== authGeneration.current) return
+        console.error('Unable to load Firebase user access role.', error)
+        setAuthError('အကောင့်ခွင့်ပြုချက်ကို မဖတ်နိုင်ပါ။ Firestore rules ကိုစစ်ဆေးပါ။')
+        setCloudStatus('error')
+      } finally {
+        if (generation === authGeneration.current) setAuthLoading(false)
+      }
+    })
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!firebaseEnabled || !firestoreDb || !firebaseUser || !userRole) return
+    const db = firestoreDb
+    const dataDocument = doc(db, 'softlight-pos', 'main')
+    return onSnapshot(dataDocument, (snapshot) => {
+      if (!snapshot.exists()) {
+        if (userRole !== 'owner') {
+          setCloudStatus('error')
+          showToast('Shop data is not set up yet. Ask the owner to sign in first.', 'error')
+          return
+        }
+        const localData = loadAppData()
+        const serializedLocalData = JSON.stringify(localData)
+        if (new Blob([serializedLocalData]).size > 900_000) {
+          console.error('POS data exceeds the supported Firestore document size.')
+          setCloudStatus('error')
+          showToast('Firebase data is too large. Reduce product image sizes to sync.', 'error')
+          return
+        }
+        setData(localData)
+        cloudSyncReady.current = true
+        lastCloudData.current = serializedLocalData
+        lastCloudRevision.current = 1
+        cloudWriteQueue.current = cloudWriteQueue.current.catch(() => undefined).then(async () => {
+          setCloudStatus('syncing')
+          await setDoc(dataDocument, { appData: localData, revision: 1, updatedAt: serverTimestamp() })
+          setCloudStatus('connected')
+        }).catch((error: unknown) => {
+          console.error('Unable to initialize Firestore POS data.', error)
+          setCloudStatus('error')
+          showToast('Firebase sync failed. Your changes remain saved locally.', 'error')
+        })
+        return
+      }
+
+      const remoteData: unknown = snapshot.data().appData
+      if (!isAppData(remoteData)) {
+        console.error('Firestore POS data is missing or has an unsupported version.')
+        setCloudStatus('error')
+        showToast('Firebase data is invalid or uses an unsupported version.', 'error')
+        return
+      }
+
+      const serializedRemoteData = JSON.stringify(remoteData)
+      cloudSyncReady.current = true
+      lastCloudData.current = serializedRemoteData
+      lastCloudRevision.current = Number(snapshot.data().revision ?? 0)
+      try {
+        saveAppData(remoteData)
+        setData((current) => JSON.stringify(current) === serializedRemoteData ? current : remoteData)
+        setCloudStatus('connected')
+      } catch (error) {
+        console.error('Unable to cache Firestore POS data locally.', error)
+        setCloudStatus('error')
+        showToast('Firebase data loaded but could not be cached locally.', 'error')
+      }
+    }, (error) => {
+      console.error('Unable to read POS data from Firestore.', error)
+      setCloudStatus('error')
+      showToast('Firebase connection failed. Check Firestore configuration and rules.', 'error')
+    })
+  }, [firebaseEnabled, firebaseUser, userRole])
+
+  useEffect(() => {
+    if (!firebaseEnabled || !firestoreDb || userRole !== 'owner' || !cloudSyncReady.current) return
+    const db = firestoreDb
+    const serializedData = JSON.stringify(data)
+    if (serializedData === lastCloudData.current) return
+    if (new Blob([serializedData]).size > 900_000) {
+      console.error('POS data exceeds the supported Firestore document size.')
+      queueMicrotask(() => {
+        setCloudStatus('error')
+        showToast('Firebase data is too large. Reduce product image sizes to sync.', 'error')
+      })
+      return
+    }
+
+    const dataDocument = doc(db, 'softlight-pos', 'main')
+    const baseRevision = lastCloudRevision.current
+    cloudWriteQueue.current = cloudWriteQueue.current.catch(() => undefined)
+      .then(async () => {
+        setCloudStatus('syncing')
+        // Staff sales write the same document from their own devices.
+        // Refuse to overwrite a newer revision so those sales are never lost.
+        const nextRevision = await runTransaction(db, async (transaction) => {
+          const snapshot = await transaction.get(dataDocument)
+          const remoteRevision = Number(snapshot.data()?.revision ?? 0)
+          if (remoteRevision !== baseRevision) throw new CloudConflictError()
+          transaction.set(dataDocument, { appData: data, revision: remoteRevision + 1, updatedAt: serverTimestamp() })
+          return remoteRevision + 1
+        })
+        lastCloudData.current = serializedData
+        lastCloudRevision.current = Math.max(lastCloudRevision.current, nextRevision)
+        setCloudStatus('connected')
+      })
+      .catch((error: unknown) => {
+        if (error instanceof CloudConflictError) {
+          setCloudStatus('connected')
+          showToast('ဝန်ထမ်းအရောင်းအသစ် ဝင်လာသဖြင့် နောက်ဆုံးပြင်ဆင်မှုကို မသိမ်းရသေးပါ။ စာရင်းအသစ်ကိုကြည့်ပြီး ထပ်ပြင်ပါ။', 'error')
+          return
+        }
+        console.error('Unable to save POS data to Firestore.', error)
+        setCloudStatus('error')
+        showToast('Firebase sync failed. Your changes remain saved locally.', 'error')
+      })
+  }, [data, firebaseEnabled, userRole])
+
   const changeAdminMode = (nextMode: boolean) => {
+    if (firebaseEnabled) return
     try {
       saveAdminMode(nextMode)
-      setIsAdmin(nextMode)
+      setLocalIsAdmin(nextMode)
       if (!nextMode) showToast('Staff mode enabled. Inventory controls are locked.')
       else showToast('Admin mode enabled.')
     } catch (error) {
@@ -132,131 +378,62 @@ function App() {
     setCart((currentCart) => currentCart.map((item) => item.id === productId ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))
   }
 
-  const onRemove = (productId: string) => setCart((currentCart) => currentCart.filter((item) => item.id !== productId))
+  const onRemove = (productId: string) => {
+    setCart((currentCart) => currentCart.filter((item) => item.id !== productId))
+  }
 
-  const onCheckout = (packagingExpense: number) => {
+  const onCheckout = async (packagingExpense: number) => {
     if (checkoutLock.current) return false
     if (cart.length === 0) {
       showToast('Add at least one item before completing a sale.', 'error')
       return false
     }
-    if (!Number.isFinite(packagingExpense) || packagingExpense < 0) {
-      showToast('Packaging cost must be a non-negative amount.', 'error')
-      return false
-    }
-
-    const invalid = cart.find((item) => {
-      const product = products.find((candidate) => candidate.id === item.id)
-      return !product?.isActive || !product || item.quantity > product.stock
-    })
-    if (invalid) {
-      showToast('One or more items exceed the available stock.', 'error')
-      return false
-    }
-
+    const saleItems = cart.map((item) => ({ productId: item.id, quantity: item.quantity }))
+    const requestPayload = JSON.stringify({ items: saleItems, packagingExpense })
+    const saleId = checkoutRequestId.current?.payload === requestPayload
+      ? checkoutRequestId.current.id
+      : crypto.randomUUID()
+    checkoutRequestId.current = { payload: requestPayload, id: saleId }
     checkoutLock.current = true
     setIsProcessing(true)
 
-    const updatedBatches = batches.map((batch) => ({ ...batch }))
-    const newMovements = [...movements]
-    const saleItems: SaleRecord['items'] = []
-    const saleId = crypto.randomUUID()
-    let productRevenue = 0
-    let totalCogs = 0
-
-    for (const item of cart) {
-      let quantityRemaining = item.quantity
-      const availableBatches = updatedBatches
-        .filter((batch) => batch.productId === item.id && batch.remainingQuantity > 0)
-        .sort((left, right) => left.receivedAt.localeCompare(right.receivedAt) || left.createdAt.localeCompare(right.createdAt))
-      const costedAvailable = availableBatches.reduce((sum, batch) => sum + batch.remainingQuantity, 0)
-      if (costedAvailable < quantityRemaining) {
-        setIsProcessing(false)
-        checkoutLock.current = false
-        showToast(`Cost the opening stock for ${item.name} before selling it.`, 'error')
-        return false
-      }
-
-      const allocations = []
-      let lineCogs = 0
-      for (const batch of availableBatches) {
-        if (quantityRemaining <= 0) break
-        const allocationQuantity = Math.min(quantityRemaining, batch.remainingQuantity)
-        const cost = allocationQuantity * batch.unitPurchaseCost
-        batch.remainingQuantity -= allocationQuantity
-        quantityRemaining -= allocationQuantity
-        lineCogs += cost
-        allocations.push({
-          batchId: batch.id,
-          quantity: allocationQuantity,
-          unitPurchaseCost: batch.unitPurchaseCost,
-          totalCost: cost,
+    try {
+      if (firebaseEnabled && firestoreDb && firebaseUser) {
+        const dataDocument = doc(firestoreDb, 'softlight-pos', 'main')
+        // The transaction re-reads the latest stock and prices, so two devices
+        // selling the last item at the same time cannot both succeed.
+        await runTransaction(firestoreDb, async (transaction) => {
+          const snapshot = await transaction.get(dataDocument)
+          const remoteData: unknown = snapshot.data()?.appData
+          if (!isAppData(remoteData)) throw new SaleError('Shop data is not set up yet.')
+          // A retry after a lost response must not record the sale twice.
+          if (remoteData.sales.some((sale) => sale.id === saleId)) return
+          const nextData = applySale(remoteData, saleItems, packagingExpense, saleId, {
+            cashierUid: firebaseUser.uid,
+            cashierEmail: firebaseUser.email ?? '',
+          })
+          transaction.set(dataDocument, {
+            appData: nextData,
+            revision: Number(snapshot.data()?.revision ?? 0) + 1,
+            updatedAt: serverTimestamp(),
+          })
         })
+      } else {
+        const nextData = applySale(data, saleItems, packagingExpense, saleId)
+        if (!commit(nextData)) return false
       }
-
-      const revenue = item.price * item.quantity
-      productRevenue += revenue
-      totalCogs += lineCogs
-      saleItems.push({
-        productId: item.id,
-        productName: item.name,
-        categoryId: item.categoryId,
-        categoryName: item.categoryName ?? item.category ?? 'Uncategorized',
-        quantity: item.quantity,
-        unitPrice: item.price,
-        subtotal: revenue,
-        revenue,
-        cogs: lineCogs,
-        grossProfit: revenue - lineCogs,
-        batchAllocations: allocations,
-      })
-
-      const inventory = products.find((candidate) => candidate.id === item.id)
-      if (inventory) {
-        let movementStock = inventory.stock
-        for (const allocation of allocations) {
-          const nextStock = movementStock - allocation.quantity
-          newMovements.push(createMovement(item.id, 'sale', -allocation.quantity, movementStock, nextStock, {
-            batchId: allocation.batchId,
-            unitPurchaseCost: allocation.unitPurchaseCost,
-            notes: `Sale ${saleId}`,
-          }))
-          movementStock = nextStock
-        }
-      }
-    }
-
-    const sale: SaleRecord = {
-      id: saleId,
-      createdAt: new Date().toISOString(),
-      items: saleItems,
-      total: productRevenue,
-      itemCount: saleItems.reduce((sum, item) => sum + item.quantity, 0),
-      productRevenue,
-      totalCogs,
-      grossProfit: productRevenue - totalCogs,
-      packagingExpense,
-      netProfit: productRevenue - totalCogs - packagingExpense,
-    }
-
-    const nextData: AppData = {
-      ...data,
-      batches: updatedBatches,
-      movements: newMovements,
-      sales: [sale, ...sales],
-      products: products.map((product) => {
-        const sold = cart.find((item) => item.id === product.id)
-        return sold ? { ...product, stock: product.stock - sold.quantity } : product
-      }),
-    }
-    const saved = commit(nextData)
-    if (saved) {
+      checkoutRequestId.current = null
       setCart([])
-      showToast(`Sale complete. ${formatCurrency(productRevenue)} product revenue recorded.`)
+      showToast('Sale complete.')
+      return true
+    } catch (error) {
+      console.error('Checkout failed.', error)
+      showToast(error instanceof SaleError ? error.message : 'Sale could not be completed. Check your connection, then retry.', 'error')
+      return false
+    } finally {
+      setIsProcessing(false)
+      checkoutLock.current = false
     }
-    setIsProcessing(false)
-    checkoutLock.current = false
-    return saved
   }
 
   const saveProduct = (product: Product, isEditing: boolean, purchasePrice: number) => {
@@ -288,10 +465,12 @@ function App() {
   const deleteProduct = (productId: string) => {
     if (!isAdmin) {
       showToast('Switch to Admin mode to manage products.', 'error')
-      return
+      return false
     }
     const next = { ...data, products: products.map((product) => product.id === productId ? { ...product, isActive: false } : product) }
-    if (commit(next)) setCart((items) => items.filter((item) => item.id !== productId))
+    const saved = commit(next)
+    if (saved) setCart((items) => items.filter((item) => item.id !== productId))
+    return saved
   }
 
   const restock = (productId: string, quantity: number, unitCost: number, receivedAt: string, supplier: string, notes: string) => {
@@ -307,25 +486,6 @@ function App() {
       products: products.map((item) => item.id === productId ? { ...item, stock: item.stock + quantity, purchasePrice: unitCost } : item),
       batches: [...batches, batch],
       movements: [...movements, createMovement(productId, 'restock', quantity, product.stock, product.stock + quantity, { batchId: batch.id, unitPurchaseCost: unitCost, notes })],
-    })
-  }
-
-  const setOpeningCost = (productId: string, unitCost: number, receivedAt: string, notes: string) => {
-    if (!isAdmin) return false
-    const product = products.find((item) => item.id === productId)
-    if (!product || product.stock <= 0 || unitCost < 0) return false
-    const recorded = batches.filter((batch) => batch.productId === productId).reduce((sum, batch) => sum + batch.remainingQuantity, 0)
-    const uncosted = product.stock - recorded
-    if (uncosted <= 0) {
-      showToast('All current stock already has a recorded cost.', 'error')
-      return false
-    }
-    const batch = createBatch(productId, uncosted, unitCost, receivedAt, '', notes || 'Opening stock cost assigned', true)
-    return commit({
-      ...data,
-      products: products.map((item) => item.id === productId ? { ...item, purchasePrice: unitCost } : item),
-      batches: [...batches, batch],
-      movements: [...movements, createMovement(productId, 'opening-cost', 0, product.stock, product.stock, { batchId: batch.id, unitPurchaseCost: unitCost, notes: notes || 'Opening stock cost assigned' })],
     })
   }
 
@@ -435,9 +595,26 @@ function App() {
     { label: 'Add Products', to: '/products', icon: PackagePlus },
     { label: 'Inventory', to: '/inventory', icon: Boxes },
     { label: 'Daily Sales', to: '/sales', icon: ReceiptText },
-  ]
+  ].filter((item) => isAdmin || item.to === '/')
   const formattedDate = currentTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
   const formattedTime = currentTime.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const cloudStatusLabel = {
+    local: 'Local only',
+    connecting: 'Connecting',
+    syncing: 'Syncing',
+    connected: 'Cloud connected',
+    error: 'Cloud error',
+  }[cloudStatus]
+
+  if (firebaseConfigError) {
+    return <main className="flex min-h-dvh items-center justify-center bg-slate-100 p-4"><section className="max-w-lg rounded-xl border border-red-200 bg-white p-6 shadow"><h1 className="text-base font-semibold text-slate-900">Firebase configuration incomplete</h1><p className="mt-2 text-sm text-slate-600">Set all Firebase environment values from <code>.env.example</code> in <code>.env.local</code>, then restart the app. Local/demo access is disabled while Firebase is partially configured.</p></section></main>
+  }
+  if (firebaseEnabled && authLoading) {
+    return <main className="flex min-h-dvh items-center justify-center bg-slate-100 text-sm text-slate-600">အကောင့်ကို စစ်ဆေးနေသည်…</main>
+  }
+  if (firebaseEnabled && (!firebaseUser || !userRole)) {
+    return <SignInScreen user={firebaseUser} message={authError} onSignedOut={() => { if (firebaseAuth) void signOut(firebaseAuth) }} />
+  }
 
   return (
     <BrowserRouter>
@@ -473,27 +650,38 @@ function App() {
                 ))}
               </nav>
               <div className="hidden items-center justify-end gap-3 md:flex">
+                <span className={`flex items-center gap-1 text-[10px] ${cloudStatus === 'connected' ? 'text-emerald-700' : cloudStatus === 'error' ? 'text-red-600' : 'text-slate-500'}`} title={cloudStatusLabel}>
+                  {cloudStatus === 'error' ? <CloudOff className="h-3.5 w-3.5" /> : <Cloud className="h-3.5 w-3.5" />}
+                  {cloudStatusLabel}
+                </span>
                 <div className="text-right leading-tight">
                   <p className="text-[10px] font-medium text-slate-700">{formattedDate}</p>
                   <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-500">
                     <Clock3 className="h-3 w-3" />{formattedTime}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
-                  <span className={`text-[10px] font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Admin' : 'Staff'} mode</span>
-                  <button type="button" role="switch" aria-checked={isAdmin} aria-label="Toggle Admin mode" onClick={() => changeAdminMode(!isAdmin)} className={`relative h-5 w-9 rounded-full transition ${isAdmin ? 'bg-amber-500' : 'bg-slate-300'}`}>
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-[18px]' : 'left-0.5'}`} />
-                  </button>
-                </div>
+                {firebaseEnabled ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
+                    <span className={`text-[10px] font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Owner' : 'Staff'}</span>
+                    <button type="button" onClick={() => { if (firebaseAuth) void signOut(firebaseAuth) }} className="rounded p-1 text-slate-500 hover:bg-slate-100" aria-label="Sign out"><LogOut className="h-3.5 w-3.5" /></button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
+                    <span className={`text-[10px] font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Admin' : 'Staff'} demo</span>
+                    <button type="button" role="switch" aria-checked={isAdmin} aria-label="Toggle Admin mode" onClick={() => changeAdminMode(!isAdmin)} className={`relative h-5 w-9 rounded-full transition ${isAdmin ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-[18px]' : 'left-0.5'}`} />
+                    </button>
+                  </div>
+                )}
               </div>
             </header>
 
-            <main className="mx-auto max-w-[1320px] px-3 py-4 pb-24 sm:px-5 sm:py-5 md:pb-5">
+            <main className="mx-auto max-w-[1320px] px-3 py-4 pb-5 sm:px-5 sm:py-5">
               <Routes>
-                <Route path="/" element={<CheckoutPage products={products.filter((product) => product.isActive !== false)} cart={cart} onAddToCart={addToCart} onIncrease={onIncrease} onDecrease={onDecrease} onRemove={onRemove} onClearCart={() => setCart([])} onCheckout={onCheckout} isProcessing={isProcessing} />} />
-                <Route path="/products" element={<AddProductsPage products={products.filter((product) => product.isActive !== false)} categories={categories} isAdmin={isAdmin} onSaveProduct={saveProduct} onDeleteProduct={deleteProduct} onShowToast={showToast} />} />
-                <Route path="/inventory" element={<InventoryPage products={products} categories={categories} batches={batches} movements={movements} isAdmin={isAdmin} lowStockThreshold={data.lowStockThreshold} onLowStockThresholdChange={changeLowStockThreshold} onRestock={restock} onSetOpeningCost={setOpeningCost} onAdjustStock={adjustStock} onEditBatch={editBatch} onAddCategory={addCategory} onRenameCategory={renameCategory} onShowToast={showToast} />} />
-                <Route path="/sales" element={<DailySalesPage sales={sales} />} />
+                <Route path="/" element={<CheckoutPage products={products.filter((product) => product.isActive !== false)} cart={cart} onAddToCart={addToCart} onIncrease={onIncrease} onDecrease={onDecrease} onRemove={onRemove} onClearCart={() => { checkoutRequestId.current = null; setCart([]) }} onCheckout={onCheckout} isProcessing={isProcessing} />} />
+                <Route path="/products" element={isAdmin ? <AddProductsPage products={products.filter((product) => product.isActive !== false)} categories={categories} isAdmin={isAdmin} onSaveProduct={saveProduct} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+                <Route path="/inventory" element={isAdmin ? <InventoryPage products={products} categories={categories} batches={batches} movements={movements} isAdmin={isAdmin} lowStockThreshold={data.lowStockThreshold} onLowStockThresholdChange={changeLowStockThreshold} onDeleteProduct={deleteProduct} onRestock={restock} onAdjustStock={adjustStock} onEditBatch={editBatch} onAddCategory={addCategory} onRenameCategory={renameCategory} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+                <Route path="/sales" element={isAdmin ? <DailySalesPage sales={sales} products={products} movements={movements} /> : <Navigate to="/" replace />} />
               </Routes>
             </main>
           </div>
@@ -513,16 +701,21 @@ function App() {
                 </NavLink>
               ))}
             </nav>
-            <div className="mt-5 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-3">
-              <span className={`text-xs font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Admin' : 'Staff'} mode</span>
-              <button type="button" role="switch" aria-checked={isAdmin} aria-label="Toggle Admin mode" onClick={() => changeAdminMode(!isAdmin)} className={`relative h-6 w-10 rounded-full transition ${isAdmin ? 'bg-amber-500' : 'bg-slate-300'}`}>
-                <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-5' : 'left-1'}`} />
-              </button>
-            </div>
+            {!firebaseEnabled ? (
+              <div className="mt-5 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-3">
+                <span className={`text-xs font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Admin' : 'Staff'} demo mode</span>
+                <button type="button" role="switch" aria-checked={isAdmin} aria-label="Toggle Admin mode" onClick={() => changeAdminMode(!isAdmin)} className={`relative h-6 w-10 rounded-full transition ${isAdmin ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
+            ) : <button type="button" onClick={() => { if (firebaseAuth) void signOut(firebaseAuth) }} className="mt-5 flex w-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 text-left text-xs font-medium text-slate-700"><LogOut className="h-4 w-4" />Sign out</button>}
+            <p className={`mt-3 flex items-center gap-2 px-3 text-xs ${cloudStatus === 'connected' ? 'text-emerald-700' : cloudStatus === 'error' ? 'text-red-600' : 'text-slate-500'}`}>
+              {cloudStatus === 'error' ? <CloudOff className="h-4 w-4" /> : <Cloud className="h-4 w-4" />}
+              {cloudStatusLabel}
+            </p>
           </SheetContent>
         </Sheet>
-        <MobileCartShortcut cart={cart} />
-        <div className="fixed bottom-2 left-2 z-30 hidden max-w-xs text-[9px] text-slate-400 md:block">Demo mode only. Browser-side roles are not secure authentication.</div>
+        {!firebaseEnabled ? <div className="fixed bottom-2 left-2 z-30 hidden max-w-xs text-[9px] text-slate-400 md:block">Demo mode only. Browser-side roles are not secure authentication.</div> : null}
         {toast ? <div className={`fixed bottom-5 right-5 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${toast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'}`} role="status">{toast.message}</div> : null}
       </div>
     </BrowserRouter>
