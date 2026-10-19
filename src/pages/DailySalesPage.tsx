@@ -370,73 +370,6 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 p-4 pb-3">
-          <div>
-            <CardTitle className="text-sm">လစဉ်စာရင်းပေါင်းချုပ်</CardTitle>
-            <p className="mt-1 text-[10px] text-slate-500">လအလိုက် ရောင်းအား၊ ပစ္စည်းတစ်မျိုးချင်းရောင်းရငွေနှင့် stock ဖြည့်သွင်းမှုများ။</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-[10px] text-slate-600">
-              လရွေးရန်
-              <Input aria-label="Select report month" type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} className="h-9 w-40 text-xs" />
-            </label>
-            <Button type="button" variant="outline" disabled={monthlyProducts.length === 0} onClick={downloadMonthlyCsv} className="h-9 gap-1.5 text-xs"><Download className="h-3.5 w-3.5" />CSV</Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 px-4 pb-4">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-            <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[10px] text-emerald-800">ရောင်းရငွေ</p><p className="mt-1 text-sm font-bold text-emerald-900">{formatCurrency(monthlyRevenue)}</p></div>
-            <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] text-slate-600">အရောင်းအကြိမ်</p><p className="mt-1 text-sm font-bold text-slate-900">{monthlySales.length}</p></div>
-            <div className="rounded-lg bg-blue-50 p-3"><p className="text-[10px] text-blue-800">ရောင်းချသည့်အရေအတွက်</p><p className="mt-1 text-sm font-bold text-blue-900">{monthlyUnits} ခု</p></div>
-            <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] text-slate-600">ကုန်ပစ္စည်းအရင်း</p><p className="mt-1 text-sm font-bold text-slate-900">{profitLabel(monthlyCogs)}</p></div>
-            <div className="rounded-lg bg-amber-50 p-3"><p className="text-[10px] text-amber-800">ထုပ်ပိုးစရိတ်</p><p className="mt-1 text-sm font-bold text-amber-900">{formatCurrency(monthlyPackaging)}</p></div>
-            <div className="rounded-lg bg-blue-50 p-3"><p className="text-[10px] text-blue-800">စုစုပေါင်းအမြတ်</p><p className="mt-1 text-sm font-bold text-blue-900">{profitLabel(monthlyGrossProfit)}</p></div>
-            <div className="rounded-lg bg-violet-50 p-3"><p className="text-[10px] text-violet-800">အသားတင်အမြတ်</p><p className="mt-1 text-sm font-bold text-violet-900">{profitLabel(monthlyNetProfit)}</p></div>
-            <div className="rounded-lg bg-amber-50 p-3"><p className="text-[10px] text-amber-800">Stock ဖြည့်သွင်းမှု</p><p className="mt-1 text-sm font-bold text-amber-900">{monthlyRestocks.length} ကြိမ် · {monthlyRestockUnits} ခု</p><p className="text-[10px] text-amber-800">{formatCurrency(monthlyRestockCost)}</p></div>
-          </div>
-          {monthlyProducts.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-xs text-slate-500">ရွေးထားသောလတွင် အရောင်း သို့မဟုတ် stock ဖြည့်သွင်းမှု မရှိပါ။</p>
-          ) : (
-            <section className="space-y-2">
-              <h3 className="text-xs font-semibold text-slate-700">ကုန်ပစ္စည်းအလိုက်</h3>
-              <div className="grid items-start gap-2 lg:grid-cols-2">
-                {monthlyProducts.map((product) => (
-                  <ExpandableRow
-                    key={product.productId}
-                    badge={product.sold > 0 ? { label: `${product.sold} ခု ရောင်း`, tone: 'emerald' } : { label: 'Stock ဖြည့်', tone: 'amber' }}
-                    title={product.name}
-                    subtitle={formatCurrency(product.revenue)}
-                    details={[
-                      ['ရောင်းရသည့်အရေအတွက်', `${product.sold} ခု`],
-                      ['ရောင်းရငွေ', formatCurrency(product.revenue)],
-                      ['အမြတ်', product.cogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(product.revenue - product.cogs)],
-                      ['Stock ဖြည့်သည့်အကြိမ်', `${product.restocks} ကြိမ်`],
-                      ['ဖြည့်သည့်အရေအတွက်', `${product.restocked} ခု`],
-                      ['ဖြည့်သည့်ငွေ', formatCurrency(product.restockCost)],
-                      ['လက်ရှိ Stock', `${product.currentStock} ခု`],
-                    ]}
-                  />
-                ))}
-              </div>
-              <ExpandableRow
-                defaultOpen
-                badge={{ label: 'စုစုပေါင်း', tone: 'slate' }}
-                title={`${monthlyUnits} ခု ရောင်းရ`}
-                subtitle={formatCurrency(monthlyRevenue)}
-                details={[
-                  ['ရောင်းရငွေ', formatCurrency(monthlyRevenue)],
-                  ['စုစုပေါင်းအမြတ်', profitLabel(monthlyGrossProfit)],
-                  ['Stock ဖြည့်သည့်အကြိမ်', `${monthlyRestocks.length} ကြိမ်`],
-                  ['ဖြည့်သည့်အရေအတွက်', `${monthlyRestockUnits} ခု`],
-                  ['ဖြည့်သည့်ငွေ', formatCurrency(monthlyRestockCost)],
-                ]}
-              />
-            </section>
-          )}
-        </CardContent>
-      </Card>
-
       <div className="grid gap-2 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {[
           { label: 'ကုန်ပစ္စည်းရောင်းရငွေ', value: formatCurrency(totalRevenue), tone: 'text-emerald-700' },
@@ -533,6 +466,73 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 p-4 pb-3">
+          <div>
+            <CardTitle className="text-sm">လစဉ်စာရင်းပေါင်းချုပ်</CardTitle>
+            <p className="mt-1 text-[10px] text-slate-500">လအလိုက် ရောင်းအား၊ ပစ္စည်းတစ်မျိုးချင်းရောင်းရငွေနှင့် stock ဖြည့်သွင်းမှုများ။</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-[10px] text-slate-600">
+              လရွေးရန်
+              <Input aria-label="Select report month" type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} className="h-9 w-40 text-xs" />
+            </label>
+            <Button type="button" variant="outline" disabled={monthlyProducts.length === 0} onClick={downloadMonthlyCsv} className="h-9 gap-1.5 text-xs"><Download className="h-3.5 w-3.5" />CSV</Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 px-4 pb-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+            <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[10px] text-emerald-800">ရောင်းရငွေ</p><p className="mt-1 text-sm font-bold text-emerald-900">{formatCurrency(monthlyRevenue)}</p></div>
+            <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] text-slate-600">အရောင်းအကြိမ်</p><p className="mt-1 text-sm font-bold text-slate-900">{monthlySales.length}</p></div>
+            <div className="rounded-lg bg-blue-50 p-3"><p className="text-[10px] text-blue-800">ရောင်းချသည့်အရေအတွက်</p><p className="mt-1 text-sm font-bold text-blue-900">{monthlyUnits} ခု</p></div>
+            <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] text-slate-600">ကုန်ပစ္စည်းအရင်း</p><p className="mt-1 text-sm font-bold text-slate-900">{profitLabel(monthlyCogs)}</p></div>
+            <div className="rounded-lg bg-amber-50 p-3"><p className="text-[10px] text-amber-800">ထုပ်ပိုးစရိတ်</p><p className="mt-1 text-sm font-bold text-amber-900">{formatCurrency(monthlyPackaging)}</p></div>
+            <div className="rounded-lg bg-blue-50 p-3"><p className="text-[10px] text-blue-800">စုစုပေါင်းအမြတ်</p><p className="mt-1 text-sm font-bold text-blue-900">{profitLabel(monthlyGrossProfit)}</p></div>
+            <div className="rounded-lg bg-violet-50 p-3"><p className="text-[10px] text-violet-800">အသားတင်အမြတ်</p><p className="mt-1 text-sm font-bold text-violet-900">{profitLabel(monthlyNetProfit)}</p></div>
+            <div className="rounded-lg bg-amber-50 p-3"><p className="text-[10px] text-amber-800">Stock ဖြည့်သွင်းမှု</p><p className="mt-1 text-sm font-bold text-amber-900">{monthlyRestocks.length} ကြိမ် · {monthlyRestockUnits} ခု</p><p className="text-[10px] text-amber-800">{formatCurrency(monthlyRestockCost)}</p></div>
+          </div>
+          {monthlyProducts.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-xs text-slate-500">ရွေးထားသောလတွင် အရောင်း သို့မဟုတ် stock ဖြည့်သွင်းမှု မရှိပါ။</p>
+          ) : (
+            <section className="space-y-2">
+              <h3 className="text-xs font-semibold text-slate-700">ကုန်ပစ္စည်းအလိုက်</h3>
+              <div className="grid items-start gap-2 lg:grid-cols-2">
+                {monthlyProducts.map((product) => (
+                  <ExpandableRow
+                    key={product.productId}
+                    badge={product.sold > 0 ? { label: `${product.sold} ခု ရောင်း`, tone: 'emerald' } : { label: 'Stock ဖြည့်', tone: 'amber' }}
+                    title={product.name}
+                    subtitle={formatCurrency(product.revenue)}
+                    details={[
+                      ['ရောင်းရသည့်အရေအတွက်', `${product.sold} ခု`],
+                      ['ရောင်းရငွေ', formatCurrency(product.revenue)],
+                      ['အမြတ်', product.cogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(product.revenue - product.cogs)],
+                      ['Stock ဖြည့်သည့်အကြိမ်', `${product.restocks} ကြိမ်`],
+                      ['ဖြည့်သည့်အရေအတွက်', `${product.restocked} ခု`],
+                      ['ဖြည့်သည့်ငွေ', formatCurrency(product.restockCost)],
+                      ['လက်ရှိ Stock', `${product.currentStock} ခု`],
+                    ]}
+                  />
+                ))}
+              </div>
+              <ExpandableRow
+                defaultOpen
+                badge={{ label: 'စုစုပေါင်း', tone: 'slate' }}
+                title={`${monthlyUnits} ခု ရောင်းရ`}
+                subtitle={formatCurrency(monthlyRevenue)}
+                details={[
+                  ['ရောင်းရငွေ', formatCurrency(monthlyRevenue)],
+                  ['စုစုပေါင်းအမြတ်', profitLabel(monthlyGrossProfit)],
+                  ['Stock ဖြည့်သည့်အကြိမ်', `${monthlyRestocks.length} ကြိမ်`],
+                  ['ဖြည့်သည့်အရေအတွက်', `${monthlyRestockUnits} ခု`],
+                  ['ဖြည့်သည့်ငွေ', formatCurrency(monthlyRestockCost)],
+                ]}
+              />
+            </section>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

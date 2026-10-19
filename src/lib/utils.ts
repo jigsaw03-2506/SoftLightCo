@@ -19,12 +19,12 @@ export function formatDateTime(value: string) {
   }).format(new Date(value))
 }
 
+// Local calendar date as YYYY-MM-DD. Built by hand because Intl locale output (e.g. en-CA) varies across browsers.
 export function formatDateOnly(value: string) {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(value))
+  const date = new Date(value)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
 }
 
 export function getProductCategory(category?: string) {
