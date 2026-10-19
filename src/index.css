@@ -3,11 +3,13 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Inter, 'Myanmar Sangam MN', 'Noto Sans Myanmar', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #0f172a;
-  background-color: #f8fafc;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  color-scheme: dark;
+  background-color: #0b0d12;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -17,14 +19,29 @@
 html {
   min-height: 100%;
   overflow-y: auto;
-  background: #f8fafc;
+  background: #0b0d12;
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
   overflow-y: auto;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  background: #0b0d12;
+}
+
+/* Soft colour wash behind everything so the frosted glass surfaces have something to refract.
+   A fixed pseudo-element is used because iOS Safari ignores background-attachment: fixed. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 15% -10%, rgba(47, 124, 246, 0.14), transparent 60%),
+    radial-gradient(50rem 36rem at 100% 0%, rgba(139, 92, 246, 0.08), transparent 60%),
+    radial-gradient(50rem 40rem at 50% 120%, rgba(16, 185, 129, 0.06), transparent 60%),
+    #0b0d12;
 }
 
 * {
@@ -41,6 +58,80 @@ select {
 img {
   max-width: 100%;
   display: block;
+}
+
+@layer base {
+  /* Dark-theme defaults for every form field, so raw <input>/<select>/<textarea> stay readable. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    color: #ffffff;
+    background-color: rgb(0 0 0 / 0.3);
+    caret-color: #ffffff;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #a39883;
+  }
+
+  input[type='file'] {
+    color: #e2d5ba;
+  }
+
+  option {
+    background-color: #161920;
+    color: #ffffff;
+  }
+
+  /* Chrome autofill paints its own light background and dark text; override it. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #ffffff;
+    caret-color: #ffffff;
+    box-shadow: 0 0 0 1000px #161920 inset;
+    transition: background-color 9999s ease-out;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply shadow-glass backdrop-blur-2xl backdrop-saturate-150;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(180deg, rgba(30, 34, 43, 0.82) 0%, rgba(18, 20, 26, 0.82) 100%);
+  }
+
+  /* "Lit" tile: dark gradient fill, a thin edge in --lit and a soft glow of the same colour,
+     with a faint highlight in the top-left corner as if light falls on it. */
+  .lit {
+    --lit: 255 255 255;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgb(var(--lit) / 0.28);
+    background:
+      radial-gradient(120% 90% at 0% 0%, rgb(var(--lit) / 0.10), transparent 55%),
+      linear-gradient(180deg, #1b1f27 0%, #121419 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.06),
+      0 0 0 1px rgb(0 0 0 / 0.25),
+      0 8px 28px -12px rgb(var(--lit) / 0.35);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  }
+  .lit:hover {
+    border-color: rgb(var(--lit) / 0.5);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 0 0 1px rgb(0 0 0 / 0.25),
+      0 10px 34px -10px rgb(var(--lit) / 0.5);
+  }
+  .lit-neutral { --lit: 148 163 184; }
+  .lit-blue { --lit: 47 124 246; }
+  .lit-emerald { --lit: 16 185 129; }
+  .lit-amber { --lit: 245 158 11; }
+  .lit-violet { --lit: 139 92 246; }
+  .lit-red { --lit: 239 68 68; }
+  .lit-orange { --lit: 249 115 22; }
 }
 
 #root {

@@ -204,8 +204,9 @@ export function InventoryPage({
                 : product.stock > 5
                   ? 'border-orange-200 bg-orange-50 text-orange-700'
                   : 'border-red-200 bg-red-50 text-red-700'
+              const cardGlow = product.stock > 10 ? 'lit-neutral' : product.stock > 5 ? 'lit-orange' : 'lit-red'
               return (
-                <article key={product.id} className="flex min-w-0 flex-col rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <article key={product.id} className={`lit ${cardGlow} flex min-w-0 flex-col rounded-2xl p-3`}>
                   <div className="mb-2 flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-semibold text-slate-900">{product.name}</p>
@@ -252,7 +253,7 @@ export function InventoryPage({
           <CardContent className="space-y-3 px-4 pb-4">
             <form onSubmit={handleAddCategory} className="flex gap-2">
               <Input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="New category name" className="h-9 max-w-sm text-xs" />
-              <Button type="submit" size="sm" className="h-9 gap-1 bg-blue-700 text-xs hover:bg-blue-800"><Plus className="h-3.5 w-3.5" />Add</Button>
+              <Button type="submit" size="sm" className="h-9 gap-1 bg-blue-700 text-xs hover:bg-blue-600"><Plus className="h-3.5 w-3.5" />Add</Button>
             </form>
             <div className="flex flex-wrap gap-2">
               {categories.map((category) => (
@@ -278,8 +279,8 @@ export function InventoryPage({
       ) : null}
 
       {dialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="inventory-dialog-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-4 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="inventory-dialog-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-surface p-4 shadow-xl">
             <div className="mb-3 flex items-start justify-between">
               <div>
                 <h2 id="inventory-dialog-title" className="text-sm font-semibold text-slate-900">
@@ -312,7 +313,7 @@ export function InventoryPage({
                 <div className="space-y-1"><label htmlFor="edit-batch-date" className="text-[10px] font-medium text-slate-700">Received date</label><Input id="edit-batch-date" type="date" required value={receivedAt} onChange={(event) => setReceivedAt(event.target.value)} className="h-9 text-xs" /></div>
                 <div className="space-y-1"><label htmlFor="edit-batch-supplier" className="text-[10px] font-medium text-slate-700">Supplier</label><Input id="edit-batch-supplier" value={supplier} onChange={(event) => setSupplier(event.target.value)} className="h-9 text-xs" /></div>
                 <div className="space-y-1"><label htmlFor="edit-batch-notes" className="text-[10px] font-medium text-slate-700">Notes</label><textarea id="edit-batch-notes" value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-16 w-full rounded-md border border-slate-200 p-2 text-xs outline-none focus:ring-2 focus:ring-slate-300" /></div>
-                <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setDialog({ kind: 'history', product: dialog.product })}>Cancel</Button><Button type="submit" size="sm" className="bg-blue-700 hover:bg-blue-800">Save batch</Button></div>
+                <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setDialog({ kind: 'history', product: dialog.product })}>Cancel</Button><Button type="submit" size="sm" className="bg-blue-700 hover:bg-blue-600">Save batch</Button></div>
               </form>
             ) : (
               <form onSubmit={submitStockAction} className="space-y-3">
@@ -339,7 +340,7 @@ export function InventoryPage({
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
                   <Button type="button" variant="outline" size="sm" onClick={closeDialog}>Cancel</Button>
-                  <Button type="submit" size="sm" className="bg-blue-700 hover:bg-blue-800">{dialog.kind === 'restock' ? 'Record restock' : 'Save adjustment'}</Button>
+                  <Button type="submit" size="sm" className="bg-blue-700 hover:bg-blue-600">{dialog.kind === 'restock' ? 'Record restock' : 'Save adjustment'}</Button>
                 </div>
               </form>
             )}

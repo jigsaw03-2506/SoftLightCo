@@ -18,7 +18,7 @@ export function ProductCard({ product, cartItem, onAddToCart }: ProductCardProps
       onClick={() => onAddToCart(product)}
       disabled={isOutOfStock}
       aria-label={`Add ${product.name} to cart`}
-      className={`group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-white text-left transition hover:border-blue-500 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-surface text-left transition hover:border-blue-500 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${
         cartItem ? 'border-blue-500 ring-1 ring-blue-200' : 'border-slate-200'
       }`}
     >

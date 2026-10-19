@@ -5,6 +5,7 @@ import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc } from
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 
 import { Button } from './components/ui/button'
+import { Input } from './components/ui/input'
 import { AddProductsPage } from './pages/AddProductsPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { DailySalesPage } from './pages/DailySalesPage'
@@ -96,11 +97,11 @@ function SignInScreen({
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-slate-100 p-4">
-      <section className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <section className="glass w-full max-w-sm rounded-[28px] p-7">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-400 text-amber-950"><Store className="h-5 w-5" /></div>
-          <div><h1 className="text-base font-bold text-slate-900">SoftLight Co.</h1><p className="text-xs text-slate-500">ဝန်ထမ်းအကောင့်ဖြээр ဝင်ပါ</p></div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2300] shadow-md shadow-amber-500/30"><Store className="h-5 w-5" /></div>
+          <div><h1 className="text-lg font-semibold tracking-tight text-slate-900">SoftLight Co.</h1><p className="text-xs text-slate-500">ဝန်ထမ်းအကောင့်ဖြээр ဝင်ပါ</p></div>
         </div>
         {message ? <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{message}</p> : null}
         {user ? (
@@ -111,14 +112,14 @@ function SignInScreen({
         ) : (
           <form onSubmit={submit} className="space-y-3">
             <label className="block space-y-1 text-xs font-medium text-slate-700">အီးမေးလ်
-              <input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} className="h-11 w-full rounded-md border border-slate-300 px-3 text-base font-normal" />
+              <Input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} className="text-base font-normal" />
             </label>
             <label className="block space-y-1 text-xs font-medium text-slate-700">စကားဝှက်
-              <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="h-11 w-full rounded-md border border-slate-300 px-3 text-base font-normal" />
+              <Input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="text-base font-normal" />
             </label>
             {error ? <p role="alert" className="text-xs text-red-600">{error}</p> : null}
             {notice ? <p role="status" className="text-xs text-emerald-700">{notice}</p> : null}
-            <Button type="submit" disabled={pending} className="h-11 w-full bg-blue-700 text-sm hover:bg-blue-800">{pending ? 'စစ်ဆေးနေသည်…' : 'ဝင်မည်'}</Button>
+            <Button type="submit" disabled={pending} className="h-11 w-full bg-blue-700 text-sm hover:bg-blue-600">{pending ? 'စစ်ဆေးနေသည်…' : 'ဝင်မည်'}</Button>
             <button type="button" disabled={pending} onClick={resetPassword} className="w-full py-1 text-xs text-blue-700 hover:underline">စကားဝှက် မေ့နေပါသလား?</button>
           </form>
         )}
@@ -653,10 +654,10 @@ function App() {
   }[cloudStatus]
 
   if (firebaseConfigError) {
-    return <main className="flex min-h-dvh items-center justify-center bg-slate-100 p-4"><section className="max-w-lg rounded-xl border border-red-200 bg-white p-6 shadow"><h1 className="text-base font-semibold text-slate-900">Firebase configuration incomplete</h1><p className="mt-2 text-sm text-slate-600">Set all Firebase environment values from <code>.env.example</code> in <code>.env.local</code>, then restart the app. Local/demo access is disabled while Firebase is partially configured.</p></section></main>
+    return <main className="flex min-h-dvh items-center justify-center p-4"><section className="glass max-w-lg rounded-2xl p-6"><h1 className="text-base font-semibold text-slate-900">Firebase configuration incomplete</h1><p className="mt-2 text-sm text-slate-600">Set all Firebase environment values from <code>.env.example</code> in <code>.env.local</code>, then restart the app. Local/demo access is disabled while Firebase is partially configured.</p></section></main>
   }
   if (firebaseEnabled && authLoading) {
-    return <main className="flex min-h-dvh items-center justify-center bg-slate-100 text-sm text-slate-600">အကောင့်ကို စစ်ဆေးနေသည်…</main>
+    return <main className="flex min-h-dvh items-center justify-center text-sm text-slate-600">အကောင့်ကို စစ်ဆေးနေသည်…</main>
   }
   if (firebaseEnabled && (!firebaseUser || !userRole)) {
     return <SignInScreen user={firebaseUser} message={authError} onSignedOut={() => { if (firebaseAuth) void signOut(firebaseAuth) }} />
@@ -664,13 +665,12 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-dvh overflow-visible bg-[#f3f5f7] text-slate-900">
-        <div className="mx-auto min-h-dvh max-w-[1440px] px-3 py-3 pb-0 sm:px-5 sm:py-5 sm:pb-5">
-          <div className="min-h-[calc(100dvh-1.5rem)] overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm sm:min-h-[calc(100dvh-2.5rem)]">
-            <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 md:grid-cols-[1fr_auto_1fr]">
+      <div className="min-h-dvh overflow-visible text-slate-900">
+        <div className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0b0d12]/70 backdrop-blur-2xl backdrop-saturate-150">
+            <header className="mx-auto grid max-w-[1320px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 sm:px-5 md:grid-cols-[1fr_auto_1fr]">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-amber-950"><Store className="h-4 w-4" /></div>
-                <div><p className="text-sm font-bold leading-tight text-slate-900">SoftLight Co.</p><p className="text-[10px] leading-tight text-slate-500">Point of Sale</p></div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2300] shadow-md shadow-amber-500/30"><Store className="h-4 w-4" /></div>
+                <div><p className="text-sm font-semibold leading-tight tracking-tight text-slate-900">SoftLight Co.</p><p className="text-[10px] leading-tight text-slate-500">Point of Sale</p></div>
               </div>
               <div className="flex items-center justify-end gap-2 md:hidden">
                 <div className="text-right leading-tight">
@@ -683,14 +683,14 @@ function App() {
                   type="button"
                   aria-label="Open navigation menu"
                   onClick={() => setIsNavigationOpen(true)}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/5 text-slate-700 hover:bg-slate-900/10"
                 >
                   <Menu className="h-4 w-4" />
                 </button>
               </div>
-              <nav className="hidden justify-center gap-1 rounded-lg bg-slate-100 p-1 md:flex">
+              <nav className="hidden justify-center gap-0.5 rounded-full bg-slate-900/5 p-1 md:flex">
                 {navItems.map(({ label, to, icon: Icon }) => (
-                  <NavLink key={to} to={to} className={({ isActive }) => `flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-[10px] font-medium transition lg:px-3 lg:text-xs ${isActive ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'}`}>
+                  <NavLink key={to} to={to} className={({ isActive }) => `flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition lg:px-4 lg:text-xs ${isActive ? 'bg-blue-700 text-white shadow-md shadow-blue-700/40' : 'text-slate-600 hover:text-slate-900'}`}>
                     <Icon className="h-3.5 w-3.5" />{label}
                   </NavLink>
                 ))}
@@ -714,12 +714,12 @@ function App() {
                       aria-haspopup="menu"
                       aria-expanded={isSettingsOpen}
                       onClick={() => setIsSettingsOpen((open) => !open)}
-                      className={`flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 ${isSettingsOpen ? 'bg-slate-100' : 'bg-white'}`}
+                      className={`flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-900/10 ${isSettingsOpen ? 'bg-slate-900/10' : 'bg-slate-900/5'}`}
                     >
                       <Settings className="h-4 w-4" />
                     </button>
                     {isSettingsOpen ? (
-                      <div role="menu" className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                      <div role="menu" className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-surface/80 shadow-2xl shadow-black/40 backdrop-blur-2xl backdrop-saturate-150">
                         <div className="border-b border-slate-100 px-4 py-3">
                           <p className="text-[10px] text-slate-500">ဝင်ထားသောအကောင့်</p>
                           <p className="mt-0.5 truncate text-xs font-semibold text-slate-900" title={firebaseUser?.email ?? ''}>{firebaseUser?.email}</p>
@@ -740,14 +740,15 @@ function App() {
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5">
                     <span className={`text-[10px] font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Admin' : 'Staff'} demo</span>
                     <button type="button" role="switch" aria-checked={isAdmin} aria-label="Toggle Admin mode" onClick={() => changeAdminMode(!isAdmin)} className={`relative h-5 w-9 rounded-full transition ${isAdmin ? 'bg-amber-500' : 'bg-slate-300'}`}>
-                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-[18px]' : 'left-0.5'}`} />
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition ${isAdmin ? 'left-[18px]' : 'left-0.5'}`} />
                     </button>
                   </div>
                 )}
               </div>
             </header>
+        </div>
 
-            <main className="mx-auto max-w-[1320px] px-3 py-4 pb-5 sm:px-5 sm:py-5">
+            <main className="mx-auto max-w-[1320px] px-3 py-5 pb-8 sm:px-5 sm:py-8">
               <Routes>
                 <Route path="/" element={<CheckoutPage products={products.filter((product) => product.isActive !== false)} cart={cart} onAddToCart={addToCart} onIncrease={onIncrease} onDecrease={onDecrease} onRemove={onRemove} onClearCart={() => { checkoutRequestId.current = null; setCart([]) }} onCheckout={onCheckout} isProcessing={isProcessing} />} />
                 <Route path="/products" element={isAdmin ? <AddProductsPage products={products.filter((product) => product.isActive !== false)} categories={categories} isAdmin={isAdmin} onSaveProduct={saveProduct} onShowToast={showToast} /> : <Navigate to="/" replace />} />
@@ -755,8 +756,6 @@ function App() {
                 <Route path="/sales" element={isAdmin ? <DailySalesPage sales={sales} products={products} movements={movements} onDeleteSale={deleteSale} onUpdateSale={updateSale} /> : <Navigate to="/" replace />} />
               </Routes>
             </main>
-          </div>
-        </div>
         <Sheet open={isNavigationOpen} onOpenChange={setIsNavigationOpen}>
           <SheetContent className="max-w-xs p-4">
             <SheetTitle className="mb-4 pr-8 text-base font-semibold text-slate-900">SoftLight Co. menu</SheetTitle>
@@ -766,7 +765,7 @@ function App() {
                   key={to}
                   to={to}
                   onClick={() => setIsNavigationOpen(false)}
-                  className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium ${isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                  className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${isActive ? 'bg-blue-700 text-white shadow-md shadow-blue-700/40' : 'text-slate-700 hover:bg-white/5'}`}
                 >
                   <Icon className="h-4 w-4" />{label}
                 </NavLink>
@@ -776,7 +775,7 @@ function App() {
               <div className="mt-5 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-3">
                 <span className={`text-xs font-semibold ${isAdmin ? 'text-amber-700' : 'text-slate-500'}`}>{isAdmin ? 'Admin' : 'Staff'} demo mode</span>
                 <button type="button" role="switch" aria-checked={isAdmin} aria-label="Toggle Admin mode" onClick={() => changeAdminMode(!isAdmin)} className={`relative h-6 w-10 rounded-full transition ${isAdmin ? 'bg-amber-500' : 'bg-slate-300'}`}>
-                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${isAdmin ? 'left-5' : 'left-1'}`} />
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-surface shadow transition ${isAdmin ? 'left-5' : 'left-1'}`} />
                 </button>
               </div>
             ) : (
@@ -798,7 +797,7 @@ function App() {
           </SheetContent>
         </Sheet>
         {!firebaseEnabled ? <div className="fixed bottom-2 left-2 z-30 hidden max-w-xs text-[9px] text-slate-400 md:block">Demo mode only. Browser-side roles are not secure authentication.</div> : null}
-        {toast ? <div className={`fixed bottom-5 right-5 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${toast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700'}`} role="status">{toast.message}</div> : null}
+        {toast ? <div className={`fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full border border-slate-200 bg-surface/80 px-5 py-3 text-sm font-medium shadow-2xl shadow-black/40 backdrop-blur-2xl backdrop-saturate-150 ${toast.type === 'success' ? 'text-emerald-700' : 'text-red-600'}`} role="status">{toast.message}</div> : null}
       </div>
     </BrowserRouter>
   )

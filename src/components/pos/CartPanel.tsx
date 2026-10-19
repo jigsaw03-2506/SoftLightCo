@@ -35,7 +35,7 @@ export function CartPanel({
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
   return (
-    <section className={cn('flex h-full min-h-[420px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white', className)}>
+    <section className={cn('glass flex h-full min-h-[420px] flex-col overflow-hidden rounded-2xl', className)}>
       <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
         <div className="flex items-center gap-2">
           <ShoppingBag className="h-4 w-4 text-blue-700" />
@@ -134,7 +134,7 @@ export function CartPanel({
         </div>
         <Button
           type="button"
-          className="h-10 w-full bg-emerald-700 text-xs font-semibold hover:bg-emerald-800"
+          className="h-10 w-full bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-500"
           onClick={onCheckout}
           disabled={items.length === 0 || isProcessing}
         >

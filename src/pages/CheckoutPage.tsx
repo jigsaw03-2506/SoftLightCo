@@ -112,7 +112,7 @@ export function CheckoutPage({
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search products by name"
-              className="h-9 rounded-md border-slate-200 bg-white pl-8 text-xs"
+              className="h-9 rounded-md border-slate-200 bg-surface pl-8 text-xs"
               aria-label="Search products by name"
             />
           </div>
@@ -132,7 +132,7 @@ export function CheckoutPage({
                 className={`min-w-0 max-w-full whitespace-normal break-words rounded-md border px-2.5 py-1.5 text-left text-[10px] font-medium transition ${
                   selectedCategory === category
                     ? "border-blue-700 bg-blue-700 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    : "border-slate-200 bg-surface text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
                 {category}
@@ -142,7 +142,7 @@ export function CheckoutPage({
         ) : null}
 
         {filteredProducts.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-surface p-8 text-center">
             <p className="text-xs font-medium text-slate-700">
               No products found
             </p>
@@ -169,7 +169,7 @@ export function CheckoutPage({
       </aside>
 
       {createPortal(
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.08)] md:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-surface px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.08)] md:hidden">
           <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <ShoppingCart className="h-5 w-5 shrink-0 text-blue-700" />
@@ -185,11 +185,11 @@ export function CheckoutPage({
             <Button
               type="button"
               onClick={() => setIsCartOpen(true)}
-              className="h-12 min-w-36 shrink-0 gap-1.5 bg-blue-700 px-4 text-sm font-semibold hover:bg-blue-800"
+              className="h-12 min-w-36 shrink-0 gap-1.5 bg-blue-700 px-4 text-sm font-semibold hover:bg-blue-600"
             >
               View Cart
               {cartItemCount > 0 ? (
-                <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-blue-700">
+                <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[9px] font-bold text-blue-700">
                   {cartItemCount}
                 </span>
               ) : null}

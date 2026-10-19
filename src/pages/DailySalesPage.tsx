@@ -77,7 +77,7 @@ const badgeTones = {
   emerald: 'bg-emerald-50 text-emerald-700',
   amber: 'bg-amber-50 text-amber-700',
   blue: 'bg-blue-50 text-blue-700',
-  slate: 'bg-slate-900 text-white',
+  slate: 'bg-white/10 text-slate-900',
 } as const
 
 function ExpandableRow({
@@ -94,7 +94,7 @@ function ExpandableRow({
   defaultOpen?: boolean
 }) {
   return (
-    <details open={defaultOpen} className="group overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <details open={defaultOpen} className="lit lit-neutral group rounded-2xl">
       <summary className="flex cursor-pointer list-none items-center gap-3 p-3 sm:p-4 [&::-webkit-details-marker]:hidden">
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badgeTones[badge.tone]}`}>
           <span className="h-1.5 w-1.5 rounded-full bg-current" />{badge.label}
@@ -161,13 +161,13 @@ function SaleEditor({
       {sale.items.map((item, index) => {
         const available = (products.find((product) => product.id === item.productId)?.stock ?? 0) + item.quantity
         return (
-          <label key={`${item.productId}-${index}`} className="flex items-center justify-between gap-3 rounded-md bg-white p-2">
+          <label key={`${item.productId}-${index}`} className="flex items-center justify-between gap-3 rounded-md bg-surface p-2">
             <span><b>{item.productName}</b><span className="block text-slate-500">{formatCurrency(item.unitPrice)} · အများဆုံး {available} ခု</span></span>
             <Input aria-label={`${item.productName} quantity`} type="number" min={0} max={available} step={1} value={quantities[index]} onChange={(event) => setQuantities((current) => current.map((value, position) => position === index ? event.target.value : value))} className="h-8 w-20 text-xs" />
           </label>
         )
       })}
-      <label className="flex items-center justify-between gap-3 rounded-md bg-white p-2">
+      <label className="flex items-center justify-between gap-3 rounded-md bg-surface p-2">
         <b>ထုပ်ပိုးစရိတ်</b>
         <Input aria-label="Packaging cost" type="number" min={0} step="any" value={packaging} onChange={(event) => setPackaging(event.target.value)} className="h-8 w-28 text-xs" />
       </label>
@@ -175,7 +175,7 @@ function SaleEditor({
       {error ? <p role="alert" className="text-red-600">{error}</p> : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel} className="h-8 text-xs">မလုပ်တော့ပါ</Button>
-        <Button type="submit" className="h-8 bg-blue-700 text-xs hover:bg-blue-800">သိမ်းမည်</Button>
+        <Button type="submit" className="h-8 bg-blue-700 text-xs hover:bg-blue-600">သိမ်းမည်</Button>
       </div>
     </form>
   )
@@ -360,9 +360,9 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
           <p className="mt-0.5 text-[10px] text-slate-500">ရောင်းရငွေ၊ FIFO အရင်း၊ ထုပ်ပိုးစရိတ်နှင့် ကုန်ပစ္စည်းရောင်းအား။</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1">
+          <div className="flex items-center gap-0.5 rounded-full bg-slate-900/5 p-1">
             {(['today', 'yesterday', 'custom', 'range'] as const).map((mode) => (
-              <button key={mode} type="button" onClick={() => setDateMode(mode)} className={`rounded px-2 py-1.5 text-[10px] font-medium ${dateMode === mode ? 'bg-blue-700 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{dateModeLabels[mode]}</button>
+              <button key={mode} type="button" onClick={() => setDateMode(mode)} className={`rounded-full px-3 py-1.5 text-[10px] font-medium transition ${dateMode === mode ? 'bg-blue-700 text-white shadow-md shadow-blue-700/40' : 'text-slate-600 hover:text-slate-900'}`}>{dateModeLabels[mode]}</button>
             ))}
           </div>
           {dateMode === 'custom' ? <Input aria-label="Select report date" type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="h-9 w-36 text-xs" /> : null}
@@ -372,15 +372,15 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
 
       <div className="grid gap-2 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {[
-          { label: 'ကုန်ပစ္စည်းရောင်းရငွေ', value: formatCurrency(totalRevenue), tone: 'text-emerald-700' },
-          { label: 'အရောင်းအကြိမ်', value: String(filteredSales.length), tone: 'text-slate-900' },
-          { label: 'ရောင်းချသည့်အရေအတွက်', value: `${totalUnits} ခု`, tone: 'text-slate-900' },
-          { label: 'ကုန်ပစ္စည်းအရင်း (FIFO)', value: totalCogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(totalCogs), tone: 'text-slate-900' },
-          { label: 'ထုပ်ပိုးစရိတ်', value: formatCurrency(packagingTotal), tone: 'text-amber-700' },
-          { label: 'စုစုပေါင်းအမြတ်', value: profitLabel(grossProfit), tone: 'text-blue-700' },
-          { label: 'အသားတင်အမြတ်', value: profitLabel(netProfit), tone: 'text-violet-700' },
+          { label: 'ကုန်ပစ္စည်းရောင်းရငွေ', value: formatCurrency(totalRevenue), tone: 'text-emerald-700', lit: 'lit-emerald' },
+          { label: 'အရောင်းအကြိမ်', value: String(filteredSales.length), tone: 'text-slate-900', lit: 'lit-neutral' },
+          { label: 'ရောင်းချသည့်အရေအတွက်', value: `${totalUnits} ခု`, tone: 'text-slate-900', lit: 'lit-neutral' },
+          { label: 'ကုန်ပစ္စည်းအရင်း (FIFO)', value: totalCogs === null ? 'အချက်အလက် မပြည့်စုံ' : formatCurrency(totalCogs), tone: 'text-slate-900', lit: 'lit-neutral' },
+          { label: 'ထုပ်ပိုးစရိတ်', value: formatCurrency(packagingTotal), tone: 'text-amber-700', lit: 'lit-amber' },
+          { label: 'စုစုပေါင်းအမြတ်', value: profitLabel(grossProfit), tone: 'text-blue-700', lit: 'lit-blue' },
+          { label: 'အသားတင်အမြတ်', value: profitLabel(netProfit), tone: 'text-violet-700', lit: 'lit-violet' },
         ].map((metric) => (
-          <Card key={metric.label}><CardContent className="p-3"><p className="text-[9px] text-slate-500">{metric.label}</p><p className={`mt-1 text-sm font-bold ${metric.tone}`}>{metric.value}</p></CardContent></Card>
+          <div key={metric.label} className={`lit ${metric.lit} rounded-2xl p-3`}><p className="text-[9px] text-slate-500">{metric.label}</p><p className={`mt-1 text-base font-bold tracking-tight ${metric.tone}`}>{metric.value}</p></div>
         ))}
       </div>
 
@@ -423,7 +423,7 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
                         if (details) details.open = true
                         setEditingSaleId(sale.id)
                       }}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-surface text-slate-600 hover:bg-slate-50"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -435,7 +435,7 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
                         event.preventDefault()
                         confirmDeleteSale(sale)
                       }}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50"
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-surface text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -483,14 +483,14 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
         </CardHeader>
         <CardContent className="space-y-3 px-4 pb-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-            <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[10px] text-emerald-800">ရောင်းရငွေ</p><p className="mt-1 text-sm font-bold text-emerald-900">{formatCurrency(monthlyRevenue)}</p></div>
-            <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] text-slate-600">အရောင်းအကြိမ်</p><p className="mt-1 text-sm font-bold text-slate-900">{monthlySales.length}</p></div>
-            <div className="rounded-lg bg-blue-50 p-3"><p className="text-[10px] text-blue-800">ရောင်းချသည့်အရေအတွက်</p><p className="mt-1 text-sm font-bold text-blue-900">{monthlyUnits} ခု</p></div>
-            <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] text-slate-600">ကုန်ပစ္စည်းအရင်း</p><p className="mt-1 text-sm font-bold text-slate-900">{profitLabel(monthlyCogs)}</p></div>
-            <div className="rounded-lg bg-amber-50 p-3"><p className="text-[10px] text-amber-800">ထုပ်ပိုးစရိတ်</p><p className="mt-1 text-sm font-bold text-amber-900">{formatCurrency(monthlyPackaging)}</p></div>
-            <div className="rounded-lg bg-blue-50 p-3"><p className="text-[10px] text-blue-800">စုစုပေါင်းအမြတ်</p><p className="mt-1 text-sm font-bold text-blue-900">{profitLabel(monthlyGrossProfit)}</p></div>
-            <div className="rounded-lg bg-violet-50 p-3"><p className="text-[10px] text-violet-800">အသားတင်အမြတ်</p><p className="mt-1 text-sm font-bold text-violet-900">{profitLabel(monthlyNetProfit)}</p></div>
-            <div className="rounded-lg bg-amber-50 p-3"><p className="text-[10px] text-amber-800">Stock ဖြည့်သွင်းမှု</p><p className="mt-1 text-sm font-bold text-amber-900">{monthlyRestocks.length} ကြိမ် · {monthlyRestockUnits} ခု</p><p className="text-[10px] text-amber-800">{formatCurrency(monthlyRestockCost)}</p></div>
+            <div className="lit lit-emerald rounded-2xl p-3"><p className="text-[10px] text-emerald-800">ရောင်းရငွေ</p><p className="mt-1 text-sm font-bold text-emerald-900">{formatCurrency(monthlyRevenue)}</p></div>
+            <div className="lit lit-neutral rounded-2xl p-3"><p className="text-[10px] text-slate-600">အရောင်းအကြိမ်</p><p className="mt-1 text-sm font-bold text-slate-900">{monthlySales.length}</p></div>
+            <div className="lit lit-blue rounded-2xl p-3"><p className="text-[10px] text-blue-800">ရောင်းချသည့်အရေအတွက်</p><p className="mt-1 text-sm font-bold text-blue-900">{monthlyUnits} ခု</p></div>
+            <div className="lit lit-neutral rounded-2xl p-3"><p className="text-[10px] text-slate-600">ကုန်ပစ္စည်းအရင်း</p><p className="mt-1 text-sm font-bold text-slate-900">{profitLabel(monthlyCogs)}</p></div>
+            <div className="lit lit-amber rounded-2xl p-3"><p className="text-[10px] text-amber-800">ထုပ်ပိုးစရိတ်</p><p className="mt-1 text-sm font-bold text-amber-900">{formatCurrency(monthlyPackaging)}</p></div>
+            <div className="lit lit-blue rounded-2xl p-3"><p className="text-[10px] text-blue-800">စုစုပေါင်းအမြတ်</p><p className="mt-1 text-sm font-bold text-blue-900">{profitLabel(monthlyGrossProfit)}</p></div>
+            <div className="lit lit-violet rounded-2xl p-3"><p className="text-[10px] text-violet-800">အသားတင်အမြတ်</p><p className="mt-1 text-sm font-bold text-violet-900">{profitLabel(monthlyNetProfit)}</p></div>
+            <div className="lit lit-amber rounded-2xl p-3"><p className="text-[10px] text-amber-800">Stock ဖြည့်သွင်းမှု</p><p className="mt-1 text-sm font-bold text-amber-900">{monthlyRestocks.length} ကြိမ် · {monthlyRestockUnits} ခု</p><p className="text-[10px] text-amber-800">{formatCurrency(monthlyRestockCost)}</p></div>
           </div>
           {monthlyProducts.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-xs text-slate-500">ရွေးထားသောလတွင် အရောင်း သို့မဟုတ် stock ဖြည့်သွင်းမှု မရှိပါ။</p>

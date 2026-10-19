@@ -183,7 +183,7 @@ export function AddProductsPage({
                   id="category"
                   value={form.categoryId}
                   onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
-                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-slate-300"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-surface px-3 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-slate-300"
                   required
                 >
                   <option value="">Choose a category</option>
@@ -263,7 +263,7 @@ export function AddProductsPage({
                   type="file"
                   accept="image/*"
                   onChange={handleImageUpload}
-                  className="mt-2 block w-full text-[10px] text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-white file:px-2 file:py-1.5 file:text-[10px] file:font-medium file:text-slate-700 file:ring-1 file:ring-slate-200"
+                  className="mt-2 block w-full text-[10px] text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-surface file:px-2 file:py-1.5 file:text-[10px] file:font-medium file:text-slate-700 file:ring-1 file:ring-slate-200"
                 />
 
                 {form.image ? (
@@ -274,7 +274,7 @@ export function AddProductsPage({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button type="submit" className="h-10 w-full gap-2 bg-blue-700 text-xs hover:bg-blue-800">
+              <Button type="submit" className="h-10 w-full gap-2 bg-blue-700 text-xs hover:bg-blue-600">
                 {editingId ? <PencilLine className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                 {editingId ? 'Update product' : 'Add product'}
               </Button>
