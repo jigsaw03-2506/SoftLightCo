@@ -169,7 +169,6 @@ export function InventoryPage({
       supplier,
       notes,
     })) {
-      onShowToast('Stock batch updated.')
       setDialog({ kind: 'history', product: dialog.product })
     }
   }
@@ -307,9 +306,9 @@ export function InventoryPage({
               </div>
             ) : dialog.kind === 'edit-batch' ? (
               <form onSubmit={submitBatchEdit} className="space-y-3">
-                {dialog.batch.remainingQuantity !== dialog.batch.quantityReceived ? <p className="rounded bg-amber-50 p-2 text-[10px] text-amber-800">Some units from this batch have already been sold. Quantity and purchase cost are locked to protect historical FIFO sale records. You may edit the received date, supplier, and notes.</p> : null}
+                {dialog.batch.remainingQuantity !== dialog.batch.quantityReceived ? <p className="rounded bg-amber-50 p-2 text-[10px] text-amber-800">Some units from this batch have already been sold, so the quantity is locked. If you change the purchase cost, the cost and profit of the sales that used this batch are recalculated.</p> : null}
                 <div className="space-y-1"><label htmlFor="edit-batch-quantity" className="text-[10px] font-medium text-slate-700">Quantity received</label><Input id="edit-batch-quantity" type="number" min="1" step="1" required disabled={dialog.batch.remainingQuantity !== dialog.batch.quantityReceived} value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-9 text-xs" /></div>
-                <div className="space-y-1"><label htmlFor="edit-batch-cost" className="text-[10px] font-medium text-slate-700">Purchase cost per unit (Ks)</label><Input id="edit-batch-cost" type="number" min="0" step="any" required disabled={dialog.batch.remainingQuantity !== dialog.batch.quantityReceived} value={unitCost} onChange={(event) => setUnitCost(event.target.value)} className="h-9 text-xs" /></div>
+                <div className="space-y-1"><label htmlFor="edit-batch-cost" className="text-[10px] font-medium text-slate-700">Purchase cost per unit (Ks)</label><Input id="edit-batch-cost" type="number" min="0" step="any" required value={unitCost} onChange={(event) => setUnitCost(event.target.value)} className="h-9 text-xs" /></div>
                 <div className="space-y-1"><label htmlFor="edit-batch-date" className="text-[10px] font-medium text-slate-700">Received date</label><Input id="edit-batch-date" type="date" required value={receivedAt} onChange={(event) => setReceivedAt(event.target.value)} className="h-9 text-xs" /></div>
                 <div className="space-y-1"><label htmlFor="edit-batch-supplier" className="text-[10px] font-medium text-slate-700">Supplier</label><Input id="edit-batch-supplier" value={supplier} onChange={(event) => setSupplier(event.target.value)} className="h-9 text-xs" /></div>
                 <div className="space-y-1"><label htmlFor="edit-batch-notes" className="text-[10px] font-medium text-slate-700">Notes</label><textarea id="edit-batch-notes" value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-16 w-full rounded-md border border-slate-200 p-2 text-xs outline-none focus:ring-2 focus:ring-slate-300" /></div>

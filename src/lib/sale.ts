@@ -167,3 +167,44 @@ export function editSale(data: AppData, saleId: string, items: SaleRequestItem[]
   }
   return applySale(reverted, items, packagingExpense, saleId, cashier, { createdAt: sale.createdAt, unitPrices })
 }
+
+// Corrects the purchase cost of a batch that has already been (partly) sold.
+// Each sale remembers which batches its units came from, so the affected sales
+// are shifted by (new cost − old cost) × units taken from this batch; any other
+// batches or fallback costs in those sales are left as they were.
+export function repriceBatch(data: AppData, batchId: string, unitPurchaseCost: number): { data: AppData; salesUpdated: number } {
+  let salesUpdated = 0
+  const sales = data.sales.map((sale) => {
+    let saleDelta = 0
+    const items = sale.items.map((item) => {
+      if (!item.batchAllocations?.some((allocation) => allocation.batchId === batchId)) return item
+      let itemDelta = 0
+      const batchAllocations = item.batchAllocations.map((allocation) => {
+        if (allocation.batchId !== batchId) return allocation
+        const totalCost = allocation.quantity * unitPurchaseCost
+        itemDelta += totalCost - allocation.totalCost
+        return { ...allocation, unitPurchaseCost, totalCost }
+      })
+      saleDelta += itemDelta
+      if (item.cogs === null || item.cogs === undefined) return { ...item, batchAllocations }
+      const cogs = item.cogs + itemDelta
+      return { ...item, batchAllocations, cogs, grossProfit: (item.revenue ?? item.subtotal) - cogs }
+    })
+    if (items.every((item, index) => item === sale.items[index])) return sale
+    salesUpdated += 1
+    if (sale.totalCogs === null || sale.totalCogs === undefined) return { ...sale, items }
+    const totalCogs = sale.totalCogs + saleDelta
+    const grossProfit = (sale.productRevenue ?? sale.total) - totalCogs
+    return { ...sale, items, totalCogs, grossProfit, netProfit: grossProfit - (sale.packagingExpense ?? 0) }
+  })
+  return {
+    salesUpdated,
+    data: {
+      ...data,
+      batches: data.batches.map((batch) => batch.id === batchId ? { ...batch, unitPurchaseCost } : batch),
+      // Restock and sale movements carry the batch cost too; the monthly restock spend is summed from them.
+      movements: data.movements.map((movement) => movement.batchId === batchId && movement.unitPurchaseCost !== undefined ? { ...movement, unitPurchaseCost } : movement),
+      sales,
+    },
+  }
+}

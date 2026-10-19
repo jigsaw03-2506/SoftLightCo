@@ -10,7 +10,7 @@ import { AddProductsPage } from './pages/AddProductsPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { DailySalesPage } from './pages/DailySalesPage'
 import { InventoryPage } from './pages/InventoryPage'
-import { applySale, editSale, revertSale, SaleError, type SaleRequestItem } from './lib/sale'
+import { applySale, editSale, repriceBatch, revertSale, SaleError, type SaleRequestItem } from './lib/sale'
 import { createBatch, createMovement, loadAdminMode, loadAppData, saveAdminMode, saveAppData } from './lib/storage'
 import type { AppData, CartItem, Category, InventoryBatch, Product } from './types'
 import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet'
@@ -557,11 +557,10 @@ function App() {
       return false
     }
     const hasBeenConsumed = batch.remainingQuantity !== batch.quantityReceived
-    if (hasBeenConsumed && (
-      updates.quantityReceived !== batch.quantityReceived ||
-      updates.unitPurchaseCost !== batch.unitPurchaseCost
-    )) {
-      showToast('Quantity and cost are locked after a batch has been sold.', 'error')
+    // Sold units are already recorded against this batch, so its quantity stays fixed.
+    // The cost can still be corrected; repriceBatch below recalculates the affected sales.
+    if (hasBeenConsumed && updates.quantityReceived !== batch.quantityReceived) {
+      showToast('Quantity is locked after a batch has been sold.', 'error')
       return false
     }
     const stockDifference = hasBeenConsumed ? 0 : updates.quantityReceived - batch.quantityReceived
@@ -576,14 +575,18 @@ function App() {
       updates.receivedAt !== batch.receivedAt ||
       updates.supplier !== batch.supplier ||
       updates.notes !== batch.notes
-    return commit({
-      ...data,
-      batches: batches.map((item) => item.id === batch.id ? nextBatch : item),
+    const costChanged = updates.unitPurchaseCost !== batch.unitPurchaseCost
+    const repriced = costChanged ? repriceBatch(data, batch.id, updates.unitPurchaseCost) : { data, salesUpdated: 0 }
+    const saved = commit({
+      ...repriced.data,
+      batches: repriced.data.batches.map((item) => item.id === batch.id ? nextBatch : item),
       products: stockDifference === 0 ? products : products.map((item) => item.id === product.id ? { ...item, stock: item.stock + stockDifference } : item),
       movements: batchWasEdited
-        ? [...movements, createMovement(product.id, 'adjustment', stockDifference, product.stock, product.stock + stockDifference, { batchId: batch.id, unitPurchaseCost: updates.unitPurchaseCost, notes: stockDifference === 0 ? 'Batch record edited' : 'Unsold batch quantity corrected' })]
-        : movements,
+        ? [...repriced.data.movements, createMovement(product.id, 'adjustment', stockDifference, product.stock, product.stock + stockDifference, { batchId: batch.id, unitPurchaseCost: updates.unitPurchaseCost, notes: costChanged ? `Batch cost changed from ${batch.unitPurchaseCost} to ${updates.unitPurchaseCost}` : stockDifference === 0 ? 'Batch record edited' : 'Unsold batch quantity corrected' })]
+        : repriced.data.movements,
     })
+    if (saved) showToast(repriced.salesUpdated > 0 ? `Batch cost updated. Profit recalculated for ${repriced.salesUpdated} sale${repriced.salesUpdated === 1 ? '' : 's'}.` : 'Stock batch updated.')
+    return saved
   }
 
   const deleteSale = (saleId: string) => {
