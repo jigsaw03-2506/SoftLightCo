@@ -5,6 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Amount fields are text inputs so they have no spinner and the scroll wheel cannot change them;
+// this keeps their typing to digits with an optional decimal point.
+export function isAmountInput(value: string) {
+  return /^\d*\.?\d*$/.test(value)
+}
+
 export function formatCurrency(value: number) {
   return `${Math.round(value).toLocaleString('en-US')} Ks`
 }

@@ -6,6 +6,10 @@ export default {
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"SF Pro Display"', '"Helvetica Neue"', 'Inter', '"Myanmar Sangam MN"', '"Noto Sans Myanmar"', 'sans-serif'],
       },
+      // The dense POS labels; same size as the text-[10px] used across older screens.
+      fontSize: {
+        '2xs': '0.625rem',
+      },
       // Dark theme done at the palette level: every scale is inverted so the existing class names
       // keep their meaning (slate-900 = strongest text, *-50 = faint tinted fill, *-700 = readable accent text).
       colors: {

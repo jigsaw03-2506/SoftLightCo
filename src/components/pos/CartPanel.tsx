@@ -1,10 +1,16 @@
+import { useId } from 'react'
 import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import type { CartItem } from '../../types'
-import { formatCurrency } from '../../lib/utils'
+import type { CartItem, PaymentMethod } from '../../types'
+import { formatCurrency, isAmountInput } from '../../lib/utils'
 import { cn } from '../../lib/utils'
+
+const paymentOptions: { value: PaymentMethod; label: string }[] = [
+  { value: 'paid', label: 'Paid' },
+  { value: 'cod', label: 'COD' },
+]
 
 type CartPanelProps = {
   className?: string
@@ -17,6 +23,10 @@ type CartPanelProps = {
   isProcessing: boolean
   packagingExpense: string
   onPackagingExpenseChange: (value: string) => void
+  paymentMethod: PaymentMethod
+  onPaymentMethodChange: (value: PaymentMethod) => void
+  customerName: string
+  onCustomerNameChange: (value: string) => void
 }
 
 export function CartPanel({
@@ -30,9 +40,16 @@ export function CartPanel({
   isProcessing,
   packagingExpense,
   onPackagingExpenseChange,
+  paymentMethod,
+  onPaymentMethodChange,
+  customerName,
+  onCustomerNameChange,
 }: CartPanelProps) {
   const grandTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+  // The panel renders twice on phones (sidebar and sheet), so ids must be unique per copy.
+  const fieldId = useId()
+  const needsCustomerName = paymentMethod === 'cod' && !customerName.trim()
 
   return (
     <section className={cn('glass flex h-full min-h-[420px] flex-col overflow-hidden rounded-2xl', className)}>
@@ -117,15 +134,46 @@ export function CartPanel({
 
       <div className="shrink-0 border-t-2 border-slate-300 p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <label htmlFor="packaging-expense" className="text-[10px] font-medium text-slate-600">Packaging cost (Ks)</label>
+          <span id={`${fieldId}-payment`} className="text-2xs font-medium text-slate-600">Payment</span>
+          <div role="group" aria-labelledby={`${fieldId}-payment`} className="flex w-40 gap-0.5 rounded-full bg-slate-900/5 p-0.5">
+            {paymentOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={paymentMethod === option.value}
+                onClick={() => onPaymentMethodChange(option.value)}
+                className={cn(
+                  'h-7 flex-1 rounded-full px-3 text-2xs font-medium transition',
+                  paymentMethod === option.value ? 'bg-blue-700 text-white' : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label htmlFor={`${fieldId}-customer`} className="text-2xs font-medium text-slate-600">Customer</label>
           <Input
-            id="packaging-expense"
-            type="number"
-            min="0"
-            step="any"
+            id={`${fieldId}-customer`}
+            value={customerName}
+            onChange={(event) => onCustomerNameChange(event.target.value)}
+            placeholder={paymentMethod === 'cod' ? 'Required for COD' : 'Optional'}
+            required={paymentMethod === 'cod'}
+            autoComplete="off"
+            className="h-8 w-40 text-xs"
+          />
+        </div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label htmlFor={`${fieldId}-packaging`} className="text-2xs font-medium text-slate-600">Packaging (Ks)</label>
+          <Input
+            id={`${fieldId}-packaging`}
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
             value={packagingExpense}
-            onChange={(event) => onPackagingExpenseChange(event.target.value)}
-            className="h-8 w-28 text-right text-xs"
+            onChange={(event) => { if (isAmountInput(event.target.value)) onPackagingExpenseChange(event.target.value) }}
+            className="h-8 w-40 text-right text-xs"
           />
         </div>
         <div className="mb-2 flex items-center justify-between">
@@ -136,9 +184,9 @@ export function CartPanel({
           type="button"
           className="h-10 w-full bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-500"
           onClick={onCheckout}
-          disabled={items.length === 0 || isProcessing}
+          disabled={items.length === 0 || isProcessing || needsCustomerName}
         >
-          {isProcessing ? 'Processing...' : 'Complete Sale'}
+          {isProcessing ? 'Processing...' : paymentMethod === 'cod' ? 'Complete COD Sale' : 'Complete Sale'}
         </Button>
       </div>
     </section>

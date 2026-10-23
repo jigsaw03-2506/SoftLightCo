@@ -3,6 +3,8 @@ import type { AppData, BatchAllocation, SaleRecord } from '../types'
 
 export type SaleRequestItem = { productId: string; quantity: number }
 
+export type SaleDetails = Pick<SaleRecord, 'cashierUid' | 'cashierEmail' | 'paymentMethod' | 'customerName' | 'paidAt'>
+
 export class SaleError extends Error {}
 
 export function applySale(
@@ -10,7 +12,7 @@ export function applySale(
   items: SaleRequestItem[],
   packagingExpense: number,
   saleId: string,
-  cashier: Pick<SaleRecord, 'cashierUid' | 'cashierEmail'> = {},
+  details: SaleDetails = {},
   // Used when the owner edits a past sale: keep its original time and prices,
   // and allow products that were deleted after the sale.
   original?: { createdAt: string; unitPrices: Record<string, number> },
@@ -18,6 +20,9 @@ export function applySale(
   if (items.length === 0) throw new SaleError('Add at least one item before completing a sale.')
   if (!Number.isFinite(packagingExpense) || packagingExpense < 0) {
     throw new SaleError('Packaging cost must be a non-negative amount.')
+  }
+  if (details.paymentMethod === 'cod' && !details.customerName?.trim()) {
+    throw new SaleError('Enter the customer name for a COD order.')
   }
 
   const products = data.products.map((product) => ({ ...product }))
@@ -104,7 +109,7 @@ export function applySale(
   const sale: SaleRecord = {
     id: saleId,
     createdAt: original?.createdAt ?? new Date().toISOString(),
-    ...cashier,
+    ...details,
     items: saleItems,
     total: productRevenue,
     itemCount: saleItems.reduce((sum, item) => sum + item.quantity, 0),
@@ -160,12 +165,28 @@ export function editSale(data: AppData, saleId: string, items: SaleRequestItem[]
   if (!sale) throw new SaleError('This sale no longer exists.')
   const unitPrices = Object.fromEntries(sale.items.map((item) => [item.productId, item.unitPrice]))
   const reverted = revertSale(data, saleId, 'edited')
-  // Firestore rejects undefined fields, so only copy the cashier when present.
-  const cashier = {
+  // Firestore rejects undefined fields, so only copy the cashier and payment details when present.
+  const details: SaleDetails = {
     ...(sale.cashierUid !== undefined ? { cashierUid: sale.cashierUid } : {}),
     ...(sale.cashierEmail !== undefined ? { cashierEmail: sale.cashierEmail } : {}),
+    ...(sale.paymentMethod !== undefined ? { paymentMethod: sale.paymentMethod } : {}),
+    ...(sale.customerName !== undefined ? { customerName: sale.customerName } : {}),
+    ...(sale.paidAt !== undefined ? { paidAt: sale.paidAt } : {}),
   }
-  return applySale(reverted, items, packagingExpense, saleId, cashier, { createdAt: sale.createdAt, unitPrices })
+  return applySale(reverted, items, packagingExpense, saleId, details, { createdAt: sale.createdAt, unitPrices })
+}
+
+export function isSaleUnpaid(sale: SaleRecord) {
+  return sale.paymentMethod === 'cod' && !sale.paidAt
+}
+
+// Records that the cash for a COD sale has arrived, or clears it if it was marked by mistake.
+export function setSalePaid(data: AppData, saleId: string, paid: boolean): AppData {
+  const sale = data.sales.find((item) => item.id === saleId)
+  if (!sale || sale.paymentMethod !== 'cod') throw new SaleError('This COD order no longer exists.')
+  const { paidAt: _previousPaidAt, ...unpaidSale } = sale
+  const nextSale: SaleRecord = paid ? { ...unpaidSale, paidAt: new Date().toISOString() } : unpaidSale
+  return { ...data, sales: data.sales.map((item) => item.id === saleId ? nextSale : item) }
 }
 
 // Corrects the purchase cost of a batch that has already been (partly) sold.

@@ -8,7 +8,7 @@ import { ProductCard } from "../components/pos/ProductCard";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "../components/ui/sheet";
-import type { CartItem, Product } from "../types";
+import type { CartItem, PaymentMethod, Product } from "../types";
 import { formatCurrency, getProductCategory } from "../lib/utils";
 
 type CheckoutPageProps = {
@@ -19,7 +19,11 @@ type CheckoutPageProps = {
   onDecrease: (productId: string) => void;
   onRemove: (productId: string) => void;
   onClearCart: () => void;
-  onCheckout: (packagingExpense: number) => boolean | Promise<boolean>;
+  onCheckout: (
+    packagingExpense: number,
+    paymentMethod: PaymentMethod,
+    customerName: string,
+  ) => boolean | Promise<boolean>;
   isProcessing: boolean;
 };
 
@@ -40,6 +44,8 @@ export function CheckoutPage({
     new URLSearchParams(window.location.search).has("showCart"),
   );
   const [packagingExpense, setPackagingExpense] = useState("0");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("paid");
+  const [customerName, setCustomerName] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     if (!searchParams.has("showCart")) return;
@@ -49,8 +55,16 @@ export function CheckoutPage({
   }, [searchParams, setSearchParams]);
 
   const handleCheckout = async () => {
-    const saved = await onCheckout(Number(packagingExpense));
-    if (saved) setPackagingExpense("0");
+    const saved = await onCheckout(
+      Number(packagingExpense),
+      paymentMethod,
+      customerName,
+    );
+    if (saved) {
+      setPackagingExpense("0");
+      setPaymentMethod("paid");
+      setCustomerName("");
+    }
     return saved;
   };
 
@@ -94,6 +108,10 @@ export function CheckoutPage({
     isProcessing,
     packagingExpense,
     onPackagingExpenseChange: setPackagingExpense,
+    paymentMethod,
+    onPaymentMethodChange: setPaymentMethod,
+    customerName,
+    onCustomerNameChange: setCustomerName,
   };
 
   return (

@@ -44,11 +44,19 @@ export type SaleItem = {
   batchAllocations?: BatchAllocation[]
 }
 
+// 'paid' = paid in full at checkout. 'cod' = cash on delivery, owed until paidAt is set.
+export type PaymentMethod = 'paid' | 'cod'
+
 export type SaleRecord = {
   id: string
   createdAt: string
   cashierUid?: string
   cashierEmail?: string
+  // Sales recorded before payment tracking have no method and count as paid.
+  paymentMethod?: PaymentMethod
+  customerName?: string
+  // When the cash for a COD sale was received.
+  paidAt?: string
   items: SaleItem[]
   total: number
   itemCount: number

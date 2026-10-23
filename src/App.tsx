@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
-import { Boxes, Clock3, Cloud, CloudOff, LogOut, Menu, PackagePlus, ReceiptText, Settings, ShoppingCart, Store } from 'lucide-react'
+import { Boxes, Clock3, Cloud, CloudOff, LogOut, Menu, PackagePlus, ReceiptText, Settings, ShoppingCart, Store, Wallet } from 'lucide-react'
 import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 
@@ -10,9 +10,10 @@ import { AddProductsPage } from './pages/AddProductsPage'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { DailySalesPage } from './pages/DailySalesPage'
 import { InventoryPage } from './pages/InventoryPage'
-import { applySale, editSale, repriceBatch, revertSale, SaleError, type SaleRequestItem } from './lib/sale'
+import { PaymentsPage } from './pages/PaymentsPage'
+import { applySale, editSale, repriceBatch, revertSale, SaleError, setSalePaid, type SaleRequestItem } from './lib/sale'
 import { createBatch, createMovement, loadAdminMode, loadAppData, saveAdminMode, saveAppData } from './lib/storage'
-import type { AppData, CartItem, Category, InventoryBatch, Product } from './types'
+import type { AppData, CartItem, Category, InventoryBatch, PaymentMethod, Product } from './types'
 import { Sheet, SheetContent, SheetTitle } from './components/ui/sheet'
 import { firebaseAuth, firebaseConfigError, firestoreDb } from './lib/firebase'
 
@@ -400,14 +401,16 @@ function App() {
     setCart((currentCart) => currentCart.filter((item) => item.id !== productId))
   }
 
-  const onCheckout = async (packagingExpense: number) => {
+  const onCheckout = async (packagingExpense: number, paymentMethod: PaymentMethod, customerName: string) => {
     if (checkoutLock.current) return false
     if (cart.length === 0) {
       showToast('Add at least one item before completing a sale.', 'error')
       return false
     }
     const saleItems = cart.map((item) => ({ productId: item.id, quantity: item.quantity }))
-    const requestPayload = JSON.stringify({ items: saleItems, packagingExpense })
+    // Firestore rejects undefined fields, so the name is only added when one was typed.
+    const payment = { paymentMethod, ...(customerName.trim() ? { customerName: customerName.trim() } : {}) }
+    const requestPayload = JSON.stringify({ items: saleItems, packagingExpense, ...payment })
     const saleId = checkoutRequestId.current?.payload === requestPayload
       ? checkoutRequestId.current.id
       : crypto.randomUUID()
@@ -429,6 +432,7 @@ function App() {
           const nextData = applySale(remoteData, saleItems, packagingExpense, saleId, {
             cashierUid: firebaseUser.uid,
             cashierEmail: firebaseUser.email ?? '',
+            ...payment,
           })
           transaction.set(dataDocument, {
             appData: nextData,
@@ -437,12 +441,12 @@ function App() {
           })
         })
       } else {
-        const nextData = applySale(data, saleItems, packagingExpense, saleId)
+        const nextData = applySale(data, saleItems, packagingExpense, saleId, payment)
         if (!commit(nextData)) return false
       }
       checkoutRequestId.current = null
       setCart([])
-      showToast('Sale complete.')
+      showToast(paymentMethod === 'cod' ? 'COD sale recorded as unpaid.' : 'Sale complete.')
       return true
     } catch (error) {
       console.error('Checkout failed.', error)
@@ -613,6 +617,18 @@ function App() {
     }
   }
 
+  const markSalePaid = (saleId: string, paid: boolean) => {
+    if (!isAdmin) return false
+    try {
+      const saved = commit(setSalePaid(data, saleId, paid))
+      if (saved) showToast(paid ? 'Marked as paid.' : 'Moved back to unpaid.')
+      return saved
+    } catch (error) {
+      showToast(error instanceof SaleError ? error.message : 'Could not update the payment.', 'error')
+      return false
+    }
+  }
+
   const changeLowStockThreshold = (threshold: number) => {
     if (!isAdmin || !Number.isInteger(threshold) || threshold < 0) return false
     return commit({ ...data, lowStockThreshold: threshold })
@@ -645,6 +661,7 @@ function App() {
     { label: 'Add Products', to: '/products', icon: PackagePlus },
     { label: 'Inventory', to: '/inventory', icon: Boxes },
     { label: 'Daily Sales', to: '/sales', icon: ReceiptText },
+    { label: 'Payments', to: '/payments', icon: Wallet },
   ].filter((item) => isAdmin || item.to === '/')
   const formattedDate = currentTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
   const formattedTime = currentTime.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -757,6 +774,7 @@ function App() {
                 <Route path="/products" element={isAdmin ? <AddProductsPage products={products.filter((product) => product.isActive !== false)} categories={categories} isAdmin={isAdmin} onSaveProduct={saveProduct} onShowToast={showToast} /> : <Navigate to="/" replace />} />
                 <Route path="/inventory" element={isAdmin ? <InventoryPage products={products} categories={categories} batches={batches} movements={movements} isAdmin={isAdmin} lowStockThreshold={data.lowStockThreshold} onLowStockThresholdChange={changeLowStockThreshold} onDeleteProduct={deleteProduct} onRestock={restock} onAdjustStock={adjustStock} onEditBatch={editBatch} onAddCategory={addCategory} onRenameCategory={renameCategory} onDeleteCategory={deleteCategory} onShowToast={showToast} /> : <Navigate to="/" replace />} />
                 <Route path="/sales" element={isAdmin ? <DailySalesPage sales={sales} products={products} movements={movements} onDeleteSale={deleteSale} onUpdateSale={updateSale} /> : <Navigate to="/" replace />} />
+                <Route path="/payments" element={isAdmin ? <PaymentsPage sales={sales} onSetPaid={markSalePaid} /> : <Navigate to="/" replace />} />
               </Routes>
             </main>
         <Sheet open={isNavigationOpen} onOpenChange={setIsNavigationOpen}>

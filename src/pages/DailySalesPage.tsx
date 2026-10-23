@@ -5,8 +5,8 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import type { InventoryMovement, Product, SaleItem, SaleRecord } from '../types'
-import { formatCurrency, formatDateOnly, formatDateTime } from '../lib/utils'
-import type { SaleRequestItem } from '../lib/sale'
+import { formatCurrency, formatDateOnly, formatDateTime, isAmountInput } from '../lib/utils'
+import { isSaleUnpaid, type SaleRequestItem } from '../lib/sale'
 
 type DailySalesPageProps = {
   sales: SaleRecord[]
@@ -60,6 +60,12 @@ function getSaleRevenue(sale: SaleRecord) {
 
 function getItemRevenue(item: SaleItem) {
   return item.revenue ?? item.subtotal
+}
+
+// Customer name and, for COD orders, whether the cash has arrived yet.
+function getPaymentLabel(sale: SaleRecord) {
+  const status = sale.paymentMethod === 'cod' ? `COD · ${isSaleUnpaid(sale) ? 'ငွေမရသေး' : 'ငွေရပြီး'}` : null
+  return [sale.customerName, status].filter(Boolean).join(' · ')
 }
 
 function csvCell(value: string | number) {
@@ -169,7 +175,7 @@ function SaleEditor({
       })}
       <label className="flex items-center justify-between gap-3 rounded-md bg-surface p-2">
         <b>ထုပ်ပိုးစရိတ်</b>
-        <Input aria-label="Packaging cost" type="number" min={0} step="any" value={packaging} onChange={(event) => setPackaging(event.target.value)} className="h-8 w-28 text-xs" />
+        <Input aria-label="Packaging cost" type="text" inputMode="decimal" autoComplete="off" value={packaging} onChange={(event) => { if (isAmountInput(event.target.value)) setPackaging(event.target.value) }} className="h-8 w-28 text-xs" />
       </label>
       <p className="text-slate-500">အရေအတွက်ကို 0 ထားလျှင် ထိုပစ္စည်းကို ဖယ်ရှားပြီး stock ပြန်ထည့်ပါမည်။</p>
       {error ? <p role="alert" className="text-red-600">{error}</p> : null}
@@ -190,6 +196,8 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
   const [rangeEnd, setRangeEnd] = useState(today)
   const [reportMonth, setReportMonth] = useState(today.slice(0, 7))
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null)
+  // The record list is long, so it starts closed and opens on request.
+  const [isSaleListOpen, setIsSaleListOpen] = useState(false)
 
   const confirmDeleteSale = (sale: SaleRecord) => {
     const message = `အရောင်း #${sale.id.slice(-6).toUpperCase()} (${formatCurrency(getSaleRevenue(sale))}) ကို ဖျက်မလား?\nရောင်းထားသောပစ္စည်းများကို stock ထဲ ပြန်ထည့်ပါမည်။`
@@ -390,7 +398,7 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
         </div>
       ) : null}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <Card>
           <CardHeader className="p-4 pb-3"><CardTitle className="text-sm">အရောင်းရဆုံး ကုန်ပစ္စည်းများ</CardTitle></CardHeader>
           <CardContent className="px-4 pb-4">
@@ -399,12 +407,17 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
         </Card>
 
         <Card>
-          <CardHeader className="p-4 pb-3"><CardTitle className="flex items-center gap-2 text-sm"><ReceiptText className="h-4 w-4" />အရောင်းမှတ်တမ်း</CardTitle></CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardHeader className={`flex-row items-center justify-between gap-2 space-y-0 p-4 ${isSaleListOpen ? 'pb-3' : ''}`}>
+            <CardTitle className="flex items-center gap-2 text-sm"><ReceiptText className="h-4 w-4" />အရောင်းမှတ်တမ်း <span className="text-xs font-normal text-slate-500">({filteredSales.length})</span></CardTitle>
+            <Button type="button" variant="outline" size="sm" aria-expanded={isSaleListOpen} aria-controls="sale-records" onClick={() => setIsSaleListOpen((open) => !open)} className="h-8 gap-1 text-xs">
+              {isSaleListOpen ? 'ပိတ်ရန်' : 'ဖွင့်ရန်'}<ChevronDown className={`h-3.5 w-3.5 transition-transform ${isSaleListOpen ? 'rotate-180' : ''}`} />
+            </Button>
+          </CardHeader>
+          {isSaleListOpen ? <CardContent id="sale-records" className="px-4 pb-4">
             {filteredSales.length === 0 ? <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-xs text-slate-500">ရွေးထားသော ကာလအတွင်း ပြီးဆုံးသည့် အရောင်းမရှိပါ။</p> : <div className="space-y-2">
               {filteredSales.map((sale) => <details key={sale.id} className="rounded-lg border border-slate-200">
                 <summary className="grid cursor-pointer grid-cols-2 gap-2 p-3 text-[10px] sm:grid-cols-4 lg:grid-cols-8">
-                  <span className="font-semibold text-slate-800">#{sale.id.slice(-6).toUpperCase()}<small className="block font-normal text-slate-500">{formatDateTime(sale.createdAt)}</small></span>
+                  <span className="font-semibold text-slate-800">#{sale.id.slice(-6).toUpperCase()}<small className="block font-normal text-slate-500">{formatDateTime(sale.createdAt)}</small>{getPaymentLabel(sale) ? <small className={`block font-normal ${isSaleUnpaid(sale) ? 'text-amber-700' : 'text-slate-500'}`}>{getPaymentLabel(sale)}</small> : null}</span>
                   <span>{sale.itemCount} ခု</span>
                   <span>ရောင်းရငွေ {formatCurrency(getSaleRevenue(sale))}</span>
                   <span>ထုပ်ပိုးစရိတ် {formatCurrency(sale.packagingExpense ?? 0)}</span>
@@ -463,7 +476,7 @@ export function DailySalesPage({ sales, products, movements, onDeleteSale, onUpd
                 ) : null}
               </details>)}
             </div>}
-          </CardContent>
+          </CardContent> : null}
         </Card>
       </div>
 
